@@ -1,0 +1,54 @@
+name: Backend CI/CD (Lambdas Python 3.13)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+    tags:
+      - 'api-v*'
+  pull_request:
+    paths:
+      - 'backend/**'
+
+jobs:
+  test:
+    name: Pruebas Unitarias de Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Ejecutar pruebas de modelo y adaptadores
+        run: |
+          python -m unittest backend/tests/test_model_and_adapters.py
+
+  deploy:
+    name: Despliegue de Lambdas en AWS
+    needs: test
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/api-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Empaquetar y actualizar Lambdas
+        run: |
+          zip -rq lambda_code.zip backend/
+          for fn in lse-submit-report-prod lse-get-public-reports-prod lse-get-upload-presign-prod lse-export-edan-prod; do
+            aws lambda update-function-code \
+              --function-name "$fn" \
+              --zip-file fileb://lambda_code.zip \
+              --region us-east-1 || true
+          done

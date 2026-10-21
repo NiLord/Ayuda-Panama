@@ -1,0 +1,41 @@
+name: Flutter App CI (Android & iOS)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/test-flutter.yml'
+    tags:
+      - 'app-v*'
+  pull_request:
+    paths:
+      - 'frontend/**'
+
+jobs:
+  test:
+    name: Flutter Analyze & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Instalar dependencias
+        run: |
+          cd frontend
+          flutter pub get
+
+      - name: Analizar código
+        run: |
+          cd frontend
+          flutter analyze --no-fatal-infos
+
+      - name: Ejecutar pruebas unitarias
+        run: |
+          cd frontend
+          flutter test

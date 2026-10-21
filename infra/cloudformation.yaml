@@ -1,0 +1,347 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Infraestructura Serverless para la Plataforma de Emergencia Ayuda Los Santos.
+  Incluye DynamoDB On-Demand, S3 cifrado para evidencia, HTTP API Gateway v2 y Lambdas (Python 3.13).
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+    Description: Ambiente de despliegue.
+
+  AdminSecretKey:
+    Type: String
+    NoEcho: true
+    Default: SinaprocEmergencia2026!
+    Description: Clave de autenticación para acceso de autoridades (SINAPROC / Cruz Roja) al endpoint de exportación con PII.
+
+Resources:
+  # ============================================================================
+  # ALMACENAMIENTO DE DATOS (DYNAMODB)
+  # ============================================================================
+  ReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub lse-reports-table-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1_UbicacionPrioridad
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  ReportersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub lse-reporters-table-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+
+  # ============================================================================
+  # ALMACENAMIENTO DE EVIDENCIA FOTOGRÁFICA (S3)
+  # ============================================================================
+  EvidenceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub lse-evidence-photos-${AWS::AccountId}-${Environment}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, HEAD]
+            AllowedOrigins: ['*']
+            MaxAge: 3600
+
+  # ============================================================================
+  # ROL IAM DE MÍNIMO PRIVILEGIO PARA LAMBDAS
+  # ============================================================================
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub lse-lambda-execution-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt ReportsTable.Arn
+                  - !Sub ${ReportsTable.Arn}/index/*
+                  - !GetAtt ReportersTable.Arn
+        - PolicyName: S3EvidenceAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub ${EvidenceBucket.Arn}/*
+
+  # ============================================================================
+  # API GATEWAY (HTTP API V2)
+  # ============================================================================
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub lse-http-api-${Environment}
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: [GET, POST, OPTIONS]
+        AllowHeaders: ['Content-Type', 'Authorization', 'X-Api-Key', 'X-Admin-Key']
+        MaxAge: 3600
+
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+
+  # ============================================================================
+  # FUNCIONES LAMBDA (PYTHON 3.13)
+  # ============================================================================
+  SubmitReportFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-submit-report-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.submit_report.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          REPORTS_TABLE_NAME: !Ref ReportsTable
+          REPORTERS_TABLE_NAME: !Ref ReportersTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "Placeholder para despliegue inicial"}
+
+  GetPublicReportsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-get-public-reports-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.get_public_reports.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          REPORTS_TABLE_NAME: !Ref ReportsTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": '{"type":"FeatureCollection","features":[]}'}
+
+  GetPresignedUrlFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-get-upload-presign-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.get_presigned_url.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          EVIDENCE_BUCKET_NAME: !Ref EvidenceBucket
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "{}"}
+
+  ExportEdanFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-export-edan-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.export_edan.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          REPORTS_TABLE_NAME: !Ref ReportsTable
+          ADMIN_SECRET_KEY: !Ref AdminSecretKey
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "{}"}
+
+  # ============================================================================
+  # INTEGRACIONES Y RUTAS DE API GATEWAY
+  # ============================================================================
+  SubmitIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt SubmitReportFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  SubmitRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /api/v1/reports
+      Target: !Sub integrations/${SubmitIntegration}
+
+  PublicIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetPublicReportsFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  PublicRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /api/v1/reports/public
+      Target: !Sub integrations/${PublicIntegration}
+
+  PresignIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetPresignedUrlFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  PresignRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /api/v1/uploads/presign
+      Target: !Sub integrations/${PresignIntegration}
+
+  ExportIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ExportEdanFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  ExportRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /api/v1/reports/export
+      Target: !Sub integrations/${ExportIntegration}
+
+  # Permisos para que API Gateway invoque las Lambdas
+  SubmitPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SubmitReportFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  PublicPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetPublicReportsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  PresignPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetPresignedUrlFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  ExportPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ExportEdanFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+# ============================================================================
+# SALIDAS (OUTPUTS)
+# ============================================================================
+Outputs:
+  HttpApiUrl:
+    Description: URL base de la API HTTP de emergencia
+    Value: !GetAtt HttpApi.ApiEndpoint
+
+  ReportsTableName:
+    Description: Nombre de la tabla DynamoDB de reportes
+    Value: !Ref ReportsTable
+
+  ReportersTableName:
+    Description: Nombre de la tabla DynamoDB de informantes
+    Value: !Ref ReportersTable
+
+  EvidenceBucketName:
+    Description: Nombre del bucket S3 para fotos de evidencia
+    Value: !Ref EvidenceBucket
