@@ -4,6 +4,13 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- Permisos de Emergencia -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Ayuda Los Santos necesita tu ubicación geográfica para ubicar con precisión el lugar del desastre y coordinar con los rescatistas.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Se requiere acceso a la cámara para capturar fotografías de los daños estructurales como evidencia para SINAPROC.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Se requiere acceso a tus fotos para adjuntar evidencia de daños a la vivienda.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

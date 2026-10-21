@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""
+Seed Sample Data Script
+Genera reportes de prueba realistas post-terremoto para la provincia de Los Santos.
+Permite probar la API localmente o inyectar datos de prueba a AWS DynamoDB.
+"""
+
+import json
+import uuid
+from datetime import datetime, timezone
+
+SAMPLE_REPORTS = [
+    {
+        "report_id": "rep_las_tablas_001",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "consentimiento_informado": True,
+        "informante": {
+            "reporter_id": "rep_voluntario_01",
+            "rol": "VOLUNTARIO_BRIGADISTA",
+            "nombre_completo": "Mateo Villarreal",
+            "telefono_contacto": "+507 6222-3344",
+            "organizacion": "Cruz Roja Los Santos",
+            "esta_presente_en_el_sitio": True,
+        },
+        "titular_afectado": {
+            "es_el_mismo_informante": False,
+            "nombre_jefe_hogar": "Doña Carmen Batista",
+            "documento_tipo": "CEDULA",
+            "documento_numero": "7-88-1234",
+            "telefono_afectado": "+507 6555-7890",
+            "estado_familia": "EVACUADOS_CALLE",
+        },
+        "ubicacion": {
+            "coordenadas": {"lat": 7.6251, "lng": -80.3542, "precision_metros": 5.0},
+            "provincia": "Los Santos",
+            "distrito": "Las Tablas",
+            "corregimiento": "Las Tablas",
+            "comunidad_sector": "Barrio Santa Librada",
+            "calle_o_direccion": "Calle Pablo Arosemena, Casa #45",
+            "punto_referencia": "Atrás del Parque Porras",
+            "accesibilidad_vial": "BLOQUEADO_ESCOMBROS",
+        },
+        "evaluacion_estructural": {
+            "tipo_inmueble": "RESIDENCIAL_CASA",
+            "sistema_constructivo": "MAMPOSTERIA_BLOQUE",
+            "habitabilidad": "INHABITABLE",
+            "riesgo_colapso_inminente": True,
+            "danos_principales": ["MUROS_AGRIETADOS", "COLAPSO_TECHO"],
+            "descripcion_dano": "Grietas diagonales severas en paredes maestras y desprendimiento de tejas.",
+        },
+        "servicios_vitales": {
+            "agua_potable": "SIN_SERVICIO",
+            "electricidad": "CABLES_CAIDOS_PELIGRO",
+            "saneamiento": "COLAPSADO",
+            "fuga_gas": False,
+        },
+        "censo_demografico": {
+            "total_ocupantes": 4,
+            "atrapados_o_desaparecidos": 0,
+            "lesionados_graves": 1,
+            "neonatos_0_2": 0,
+            "ninos_3_12": 1,
+            "adolescentes_13_17": 0,
+            "adultos_18_59": 2,
+            "adultos_mayores_60": 1,
+            "embarazadas": 0,
+            "personas_discapacidad": 1,
+        },
+        "necesidades_humanitarias": {
+            "requiere_albergue_inmediato": True,
+            "requiere_rescate_medico": True,
+            "requiere_agua_alimentos": True,
+            "colchon_doble_qty": 2,
+            "kit_higiene_familiar_qty": 1,
+            "kit_limpieza_qty": 1,
+        },
+        "auditoria_kyc": {
+            "installation_id": "inst_seed_01",
+            "es_dispositivo_fisico": True,
+            "marca": "Samsung",
+            "modelo": "Galaxy A52",
+            "sistema_operativo": "Android 13",
+            "nivel_bateria_pct": 34,
+            "tipo_conexion": "CELULAR",
+        },
+    },
+    {
+        "report_id": "rep_pedasi_002",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "consentimiento_informado": True,
+        "informante": {
+            "reporter_id": "rep_ciudadano_02",
+            "rol": "AFECTADO_DIRECTO",
+            "nombre_completo": "Lorenzo Delgado",
+            "telefono_contacto": "+507 6789-4455",
+            "esta_presente_en_el_sitio": True,
+        },
+        "titular_afectado": {
+            "es_el_mismo_informante": True,
+            "nombre_jefe_hogar": "Lorenzo Delgado",
+            "documento_tipo": "CEDULA",
+            "documento_numero": "7-102-555",
+            "telefono_afectado": "+507 6789-4455",
+            "estado_familia": "EN_SITIO",
+        },
+        "ubicacion": {
+            "coordenadas": {"lat": 7.5312, "lng": -80.0315, "precision_metros": 8.0},
+            "provincia": "Los Santos",
+            "distrito": "Pedasí",
+            "corregimiento": "Pedasí",
+            "comunidad_sector": "Pedasí Centro",
+            "calle_o_direccion": "Avenida Principal",
+            "accesibilidad_vial": "TRANSITABLE",
+        },
+        "evaluacion_estructural": {
+            "tipo_inmueble": "RESIDENCIAL_CASA",
+            "sistema_constructivo": "QUINCHA_ADOBE",
+            "habitabilidad": "COLAPSO_TOTAL",
+            "riesgo_colapso_inminente": False,
+            "danos_principales": ["COLAPSO_TOTAL"],
+            "descripcion_dano": "Casa antigua de quincha colapsó totalmente tras el movimiento telúrico.",
+        },
+        "servicios_vitales": {
+            "agua_potable": "SIN_SERVICIO",
+            "electricidad": "CORTE",
+            "saneamiento": "COLAPSADO",
+            "fuga_gas": True,
+        },
+        "censo_demografico": {
+            "total_ocupantes": 2,
+            "atrapados_o_desaparecidos": 1,  # INSARAG ALERTA
+            "lesionados_graves": 1,
+            "adultos_mayores_60": 2,
+        },
+        "necesidades_humanitarias": {
+            "requiere_albergue_inmediato": True,
+            "requiere_rescate_medico": True,
+            "requiere_agua_alimentos": True,
+            "colchon_doble_qty": 1,
+            "kit_higiene_familiar_qty": 1,
+        },
+        "auditoria_kyc": {
+            "installation_id": "inst_seed_02",
+            "es_dispositivo_fisico": True,
+            "marca": "Xiaomi",
+            "modelo": "Redmi Note 11",
+            "sistema_operativo": "Android 12",
+            "nivel_bateria_pct": 12,
+            "tipo_conexion": "CELULAR",
+        },
+    },
+    {
+        "report_id": "rep_guarare_003",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "consentimiento_informado": True,
+        "informante": {
+            "reporter_id": "rep_vecino_03",
+            "rol": "VECINO_O_TERCERO",
+            "nombre_completo": "Ana Lucía Castillo",
+            "telefono_contacto": "+507 6333-8899",
+            "esta_presente_en_el_sitio": True,
+        },
+        "titular_afectado": {
+            "es_el_mismo_informante": False,
+            "nombre_jefe_hogar": "Familia Arosemena",
+            "estado_familia": "EN_SITIO",
+        },
+        "ubicacion": {
+            "coordenadas": {"lat": 7.6823, "lng": -80.3211, "precision_metros": 6.0},
+            "provincia": "Los Santos",
+            "distrito": "Guararé",
+            "corregimiento": "Guararé",
+            "comunidad_sector": "La Enea",
+            "calle_o_direccion": "Calle al Río",
+            "accesibilidad_vial": "TRANSITABLE",
+        },
+        "evaluacion_estructural": {
+            "tipo_inmueble": "RESIDENCIAL_CASA",
+            "sistema_constructivo": "MAMPOSTERIA_BLOQUE",
+            "habitabilidad": "HABITABLE",
+            "riesgo_colapso_inminente": False,
+            "danos_principales": ["GRIETAS_SUPERFICIALES"],
+            "descripcion_dano": "Grietas finas en repello cosmético, estructura de vigas intacta. Seguro habitar.",
+        },
+        "servicios_vitales": {
+            "agua_potable": "NORMAL",
+            "electricidad": "NORMAL",
+            "saneamiento": "FUNCIONAL",
+            "fuga_gas": False,
+        },
+        "censo_demografico": {
+            "total_ocupantes": 3,
+            "neonatos_0_2": 1,
+            "adultos_18_59": 2,
+        },
+        "necesidades_humanitarias": {
+            "requiere_albergue_inmediato": False,
+            "requiere_rescate_medico": False,
+            "kit_bebe_qty": 1,
+        },
+        "auditoria_kyc": {
+            "installation_id": "inst_seed_03",
+            "es_dispositivo_fisico": True,
+            "marca": "Apple",
+            "modelo": "iPhone 13",
+            "sistema_operativo": "iOS 17.4",
+            "nivel_bateria_pct": 78,
+            "tipo_conexion": "WIFI",
+        },
+    },
+]
+
+if __name__ == "__main__":
+    print(f"Generados {len(SAMPLE_REPORTS)} reportes de prueba realistas para Los Santos.")
+    print("Guardando en sample_reports.json...")
+    with open("sample_reports.json", "w", encoding="utf-8") as f:
+        json.dump(SAMPLE_REPORTS, f, indent=2, ensure_ascii=False)
+    print("✓ Archivo sample_reports.json creado exitosamente.")
