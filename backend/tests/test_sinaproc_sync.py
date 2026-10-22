@@ -27,7 +27,9 @@ from backend.src.adapters.sinaproc_sync import (
     map_sinaproc_damage_to_atc20,
     parse_sinaproc_timestamp,
     transform_sinaproc_to_dynamo_item,
-    fetch_sinaproc_features,
+    build_where_clause,
+    fetch_sinaproc_object_ids,
+    fetch_sinaproc_chunk,
 )
 
 
@@ -40,13 +42,16 @@ class TestSinaprocSync(unittest.TestCase):
         self.assertEqual(map_sinaproc_damage_to_atc20(None), "HABITABLE")
 
     def test_parse_sinaproc_timestamp(self):
-        # Test epoch in ms: 1729555200000 -> 2024-10-22
         iso = parse_sinaproc_timestamp(1729555200000)
         self.assertIn("2024-10-22", iso)
-
-        # Test string format
         iso_str = parse_sinaproc_timestamp("15/10/2026 14:30:00")
         self.assertIn("2026-10-15", iso_str)
+
+    def test_build_where_clause(self):
+        from datetime import datetime, timezone
+        self.assertEqual(build_where_clause(None), "1=1")
+        dt = datetime(2026, 10, 15, 12, 0, 0, tzinfo=timezone.utc)
+        self.assertEqual(build_where_clause(dt), "last_edited_date >= timestamp '2026-10-15 12:00:00'")
 
     def test_transform_sinaproc_to_dynamo_item(self):
         raw_attr = {
@@ -76,25 +81,35 @@ class TestSinaprocSync(unittest.TestCase):
         self.assertEqual(item["ubicacion"]["coordenadas"]["lng"], Decimal("-80.2845"))
 
     @patch("urllib.request.urlopen")
-    def test_fetch_sinaproc_features_mock(self, mock_urlopen):
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = b'{"features": [{"attributes": {"objectid": 1, "cedula": "7-1-1"}}]}'
-        mock_resp.__enter__.return_value = mock_resp
-        mock_urlopen.return_value = mock_resp
+    def test_fetch_sinaproc_object_ids_and_chunk(self, mock_urlopen):
+        mock_resp_ids = MagicMock()
+        mock_resp_ids.read.return_value = b'{"objectIds": [1, 2, 3]}'
+        mock_resp_ids.__enter__.return_value = mock_resp_ids
 
-        features = fetch_sinaproc_features(last_edited_ms=100)
-        self.assertEqual(len(features), 1)
-        self.assertEqual(features[0]["objectid"], 1)
+        mock_urlopen.return_value = mock_resp_ids
+        ids = fetch_sinaproc_object_ids("http://example.com")
+        self.assertEqual(ids, [1, 2, 3])
+
+        mock_resp_chunk = MagicMock()
+        mock_resp_chunk.read.return_value = b'{"features": [{"attributes": {"objectid": 1, "cedula": "7-1-1"}}]}'
+        mock_resp_chunk.__enter__.return_value = mock_resp_chunk
+        mock_urlopen.return_value = mock_resp_chunk
+
+        feats = fetch_sinaproc_chunk("http://example.com", [1])
+        self.assertEqual(len(feats), 1)
+        self.assertEqual(feats[0]["objectid"], 1)
 
     @patch("backend.src.handlers.sync_sinaproc.external_table")
-    @patch("backend.src.handlers.sync_sinaproc.fetch_sinaproc_features")
-    def test_sync_sinaproc_handler_checkpoint(self, mock_fetch, mock_table):
+    @patch("backend.src.handlers.sync_sinaproc.fetch_sinaproc_object_ids")
+    @patch("backend.src.handlers.sync_sinaproc.fetch_sinaproc_chunk")
+    def test_sync_sinaproc_handler_checkpoint(self, mock_chunk, mock_ids, mock_table):
         from backend.src.handlers.sync_sinaproc import lambda_handler
 
         mock_table.get_item.return_value = {
             "Item": {"last_sync_ms": 1700000000000}
         }
-        mock_fetch.return_value = [
+        mock_ids.return_value = [100]
+        mock_chunk.return_value = [
             {
                 "objectid": 100,
                 "cedula": "7-71-1473",
