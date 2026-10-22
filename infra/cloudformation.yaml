@@ -203,6 +203,8 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:Query
                   - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:BatchGetItem
                 Resource:
                   - !GetAtt ReportsTable.Arn
                   - !Sub ${ReportsTable.Arn}/index/*
