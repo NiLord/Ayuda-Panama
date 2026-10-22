@@ -20,10 +20,18 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: Validar Sintaxis de Plantillas
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Instalar cfn-lint
         run: |
-          python3 -c "import yaml; yaml.safe_load(open('infra/cloudformation.yaml'))"
-          python3 -c "import yaml; yaml.safe_load(open('infra/github-oidc.yaml'))"
+          pip install cfn-lint
+
+      - name: Validar Sintaxis de Plantillas con cfn-lint
+        run: |
+          cfn-lint infra/cloudformation.yaml infra/github-oidc.yaml
 
   deploy:
     name: Desplegar Infraestructura en AWS
@@ -100,6 +108,12 @@ jobs:
           echo "app_api_key=$APP_API_KEY" >> "$GITHUB_OUTPUT"
           echo "app_api_secret=$APP_API_SECRET" >> "$GITHUB_OUTPUT"
           echo "admin_secret_key=$ADMIN_SECRET_KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Validar Plantilla con AWS API
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://infra/cloudformation.yaml \
+            --region "${AWS_REGION}"
 
       - name: Desplegar CloudFormation Stack
         run: |
