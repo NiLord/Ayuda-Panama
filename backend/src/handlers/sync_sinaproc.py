@@ -43,6 +43,18 @@ def lambda_handler(event: dict, context) -> dict:
         max_records = int(query_params.get("limit", 200))
         last_sync_ms = int(query_params.get("since_ms", 0))
 
+        # Si no se pasó since_ms explícito (ej. invocado por EventBridge), buscar checkpoint en DynamoDB
+        if last_sync_ms == 0:
+            try:
+                state_resp = external_table.get_item(
+                    Key={"PK": "CONFIG#SYNC_STATE", "SK": "SINAPROC"}
+                )
+                if "Item" in state_resp:
+                    last_sync_ms = int(state_resp["Item"].get("last_sync_ms", 0))
+                    logger.info("Recuperado checkpoint de sincronización previo: since_ms=%d", last_sync_ms)
+            except Exception as st_err:
+                logger.warning("No se pudo leer checkpoint de sincronización previo: %s", str(st_err))
+
         logger.info("Iniciando sincronización SINAPROC desde %s (since_ms=%d)", FEATURE_SERVER_URL, last_sync_ms)
         features = fetch_sinaproc_features(
             feature_server_url=FEATURE_SERVER_URL,
@@ -53,6 +65,7 @@ def lambda_handler(event: dict, context) -> dict:
         logger.info("Recuperados %d registros de SINAPROC", len(features))
         items_procesados = 0
         items_con_cedula = 0
+        max_timestamp_visto = last_sync_ms
 
         with external_table.batch_writer() as batch:
             for feat in features:
@@ -64,11 +77,31 @@ def lambda_handler(event: dict, context) -> dict:
                     if "cedula_normalizada" in item:
                         items_con_cedula += 1
 
+                # Seguir el timestamp más reciente para el checkpoint
+                feat_ts = feat.get("last_edited_date") or feat.get("created_date") or 0
+                if isinstance(feat_ts, (int, float)) and feat_ts > max_timestamp_visto:
+                    max_timestamp_visto = int(feat_ts)
+
+        # Actualizar checkpoint de sincronización en DynamoDB
+        if max_timestamp_visto > last_sync_ms:
+            try:
+                external_table.put_item(Item={
+                    "PK": "CONFIG#SYNC_STATE",
+                    "SK": "SINAPROC",
+                    "last_sync_ms": max_timestamp_visto,
+                    "last_sync_iso": datetime.now(timezone.utc).isoformat(),
+                    "total_items_procesados": items_procesados,
+                })
+                logger.info("Checkpoint de sincronización actualizado a %d", max_timestamp_visto)
+            except Exception as upd_err:
+                logger.warning("Error guardando checkpoint de sincronización: %s", str(upd_err))
+
         resultado = {
             "success": True,
             "total_recuperados": len(features),
             "items_guardados": items_procesados,
             "items_con_cedula_indexada": items_con_cedula,
+            "checkpoint_ms": max_timestamp_visto,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         logger.info("Sincronización SINAPROC finalizada con éxito: %s", json.dumps(resultado))

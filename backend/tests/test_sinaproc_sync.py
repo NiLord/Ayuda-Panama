@@ -65,3 +65,31 @@ def test_fetch_sinaproc_features_mock(mock_urlopen):
     features = fetch_sinaproc_features(last_edited_ms=100)
     assert len(features) == 1
     assert features[0]["objectid"] == 1
+
+
+@patch("backend.src.handlers.sync_sinaproc.external_table")
+@patch("backend.src.handlers.sync_sinaproc.fetch_sinaproc_features")
+def test_sync_sinaproc_handler_checkpoint(mock_fetch, mock_table):
+    import json
+    from backend.src.handlers.sync_sinaproc import lambda_handler
+
+    mock_table.get_item.return_value = {
+        "Item": {"last_sync_ms": 1700000000000}
+    }
+    mock_fetch.return_value = [
+        {
+            "objectid": 100,
+            "cedula": "7-71-1473",
+            "last_edited_date": 1700005000000,
+        }
+    ]
+
+    event = {}  # EventBridge trigger
+    response = lambda_handler(event, None)
+    assert response["statusCode"] == 200
+    body = json.loads(response["body"])
+    assert body["success"] is True
+    assert body["items_guardados"] == 1
+    assert body["checkpoint_ms"] == 1700005000000
+    mock_table.put_item.assert_called_once()
+

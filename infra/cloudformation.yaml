@@ -356,6 +356,26 @@ Resources:
           def lambda_handler(event, context):
               return {"statusCode": 200, "body": "{}"}
 
+  # Regla EventBridge programada para sincronización periódica de SINAPROC
+  SinaprocSyncSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub lse-sinaproc-sync-schedule-${Environment}
+      Description: Dispara la sincronización periódica de registros EDAN desde el FeatureServer de SINAPROC
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SyncSinaprocFunction.Arn
+          Id: SyncSinaprocScheduleTarget
+
+  SinaprocSyncSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SyncSinaprocFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt SinaprocSyncSchedule.Arn
+
   GetPresignedUrlFunction:
     Type: AWS::Lambda::Function
     Properties:
