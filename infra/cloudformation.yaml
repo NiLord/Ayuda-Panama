@@ -13,7 +13,6 @@ Parameters:
   AdminSecretKey:
     Type: String
     NoEcho: true
-    Default: SinaprocEmergencia2026!
     Description: Clave de autenticación para acceso de autoridades (SINAPROC / Cruz Roja) al endpoint de exportación con PII.
 
   AppApiKey:

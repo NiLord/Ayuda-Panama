@@ -28,7 +28,7 @@ from ..models.disaster_assessment import (
 from ..adapters.sinaproc_adapter import SinaprocSurvey123Adapter
 
 REPORTS_TABLE_NAME = os.environ.get("REPORTS_TABLE_NAME", "lse-reports-table")
-ADMIN_SECRET_KEY = os.environ.get("ADMIN_SECRET_KEY", "SinaprocEmergencia2026!")
+ADMIN_SECRET_KEY = os.environ.get("ADMIN_SECRET_KEY", "")
 
 dynamodb = boto3.resource("dynamodb")
 reports_table = dynamodb.Table(REPORTS_TABLE_NAME)

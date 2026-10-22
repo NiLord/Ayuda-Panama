@@ -98,11 +98,33 @@ jobs:
             --overwrite \
             --region "${AWS_REGION}" > /dev/null || true
 
+          # 3. Admin Key para exportación oficial SINAPROC
+          EXISTING_ADMIN=$(aws ssm get-parameter --name "/ayuda-panama/${ENVIRONMENT}/admin-key" --with-decryption --query "Parameter.Value" --output text --region "${AWS_REGION}" 2>/dev/null || echo "")
+          if [ -n "$EXISTING_ADMIN" ]; then
+            echo "✓ Admin Key recuperada desde SSM."
+            ADMIN_SECRET_KEY="$EXISTING_ADMIN"
+          elif [ -n "${{ secrets.ADMIN_SECRET_KEY }}" ]; then
+            ADMIN_SECRET_KEY="${{ secrets.ADMIN_SECRET_KEY }}"
+            echo "✓ Admin Key obtenida desde GitHub Secrets."
+          else
+            ADMIN_SECRET_KEY="$(openssl rand -hex 24)"
+            echo "✓ Nueva Admin Key generada criptográficamente."
+          fi
+
+          aws ssm put-parameter \
+            --name "/ayuda-panama/${ENVIRONMENT}/admin-key" \
+            --type "SecureString" \
+            --value "${ADMIN_SECRET_KEY}" \
+            --overwrite \
+            --region "${AWS_REGION}" > /dev/null || true
+
           # Exportar a variables de paso enmascaradas
           echo "::add-mask::$APP_API_KEY"
           echo "::add-mask::$APP_API_SECRET"
+          echo "::add-mask::$ADMIN_SECRET_KEY"
           echo "app_api_key=$APP_API_KEY" >> "$GITHUB_OUTPUT"
           echo "app_api_secret=$APP_API_SECRET" >> "$GITHUB_OUTPUT"
+          echo "admin_secret_key=$ADMIN_SECRET_KEY" >> "$GITHUB_OUTPUT"
 
       - name: Validar Plantilla de CloudFormation
         run: |
@@ -119,6 +141,7 @@ jobs:
                 Environment="${ENVIRONMENT}" \
                 AppApiKey="${{ steps.resolve-secrets.outputs.app_api_key }}" \
                 AppApiSecret="${{ steps.resolve-secrets.outputs.app_api_secret }}" \
+                AdminSecretKey="${{ steps.resolve-secrets.outputs.admin_secret_key }}" \
             --capabilities CAPABILITY_NAMED_IAM \
             --region "${AWS_REGION}"
 
