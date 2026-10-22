@@ -41,7 +41,9 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${RepositoryName}:*
+                token.actions.githubusercontent.com:sub:
+                  - 'repo:NiLord@1009537/Ayuda-Panama@1429720058:*'
+                  - !Sub repo:${GitHubOrg}/${RepositoryName}:*
       Policies:
         - PolicyName: GitHubActionsDeployPermissions
           PolicyDocument:
