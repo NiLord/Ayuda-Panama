@@ -80,6 +80,7 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
           fechaRecibido: dupRes.tramiteMiviot!['fecha_recibido'] as String?,
           pasoActual: dupRes.tramiteMiviot!['paso_actual'] as int?,
           estadoActual: dupRes.tramiteMiviot!['estado_actual'] as String?,
+          ultimaActualizacion: dupRes.tramiteMiviot!['ultima_actualizacion'] as String?,
           mensaje: 'Trámite oficial recuperado',
         );
       } else if (dupRes.tramiteMiviot != null && dupRes.tramiteMiviot!['es_timeout'] == true) {
@@ -92,6 +93,7 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
           puedeReintentar: true,
           cedula: cedula,
           cedulaCensurada: dupRes.cedulaCensurada,
+          ultimaActualizacion: dupRes.tramiteMiviot!['ultima_actualizacion'] as String?,
           mensaje: dupRes.tramiteMiviot!['mensaje'] as String? ?? 'Tiempo de espera agotado al consultar MIVIOT.',
         );
       } else if (dupRes.tramiteMiviot != null && dupRes.tramiteMiviot!['verificado_inexistente'] == true) {
@@ -104,6 +106,7 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
           puedeReintentar: false,
           cedula: cedula,
           cedulaCensurada: dupRes.cedulaCensurada,
+          ultimaActualizacion: dupRes.tramiteMiviot!['ultima_actualizacion'] as String?,
           mensaje: dupRes.tramiteMiviot!['mensaje'] as String? ?? 'Sin expediente en MIVIOT.',
         );
       } else {
@@ -143,13 +146,56 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
         setState(() {
           _miviotResult = res;
           _reintentandoMiviot = false;
+
+          if (res != null && res.encontrado) {
+            if (_checkResult != null) {
+              final currentSistemas = List<String>.from(_checkResult!.sistemas);
+              if (!currentSistemas.contains('MIVIOT')) {
+                currentSistemas.add('MIVIOT');
+              }
+              final currentDetalles = List<Map<String, dynamic>>.from(_checkResult!.detalles);
+              currentDetalles.removeWhere((d) => d['fuente'] == 'MIVIOT');
+              currentDetalles.add({
+                'fuente': 'MIVIOT',
+                'reporte': res.reporte,
+                'fecha': res.fechaRecibido,
+                'paso_actual': res.pasoActual,
+                'estado': 'Expediente de vivienda activo: ${res.estadoActual}',
+              });
+
+              _checkResult = DuplicateCheckResult(
+                success: true,
+                existeDuplicado: true,
+                cedula: _checkResult!.cedula.isNotEmpty ? _checkResult!.cedula : cedula,
+                cedulaCensurada: _checkResult!.cedulaCensurada.isNotEmpty ? _checkResult!.cedulaCensurada : res.cedulaCensurada,
+                sistemas: currentSistemas,
+                detalles: currentDetalles,
+                tramiteMiviot: {
+                  'reporte': res.reporte,
+                  'fecha_recibido': res.fechaRecibido,
+                  'paso_actual': res.pasoActual,
+                  'estado_actual': res.estadoActual,
+                  'encontrado': true,
+                  'ultima_actualizacion': res.ultimaActualizacion,
+                },
+                mensaje: _checkResult!.mensaje,
+              );
+            }
+          }
         });
 
         if (res != null && res.encontrado) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('¡Expediente ${res.reporte} localizado en MIVIOT!'),
+              content: Text('¡MIVIOT al día! Reporte ${res.reporte} (${res.estadoActual})'),
               backgroundColor: const Color(0xFF1B5E20),
+            ),
+          );
+        } else if (res != null && res.verificadoInexistente) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('MIVIOT: No se registran nuevos trámites para esta cédula.'),
+              backgroundColor: Colors.blueGrey,
             ),
           );
         } else if (res != null && res.tieneError) {
@@ -493,7 +539,9 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
+              _buildBotonActualizarMiviot(),
+              const SizedBox(height: 14),
               ElevatedButton.icon(
                 onPressed: () {
                   Navigator.of(context).push(
@@ -792,6 +840,8 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 16),
+                _buildBotonActualizarMiviot(),
               ],
             ),
           ),
@@ -837,6 +887,86 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  String _obtenerFechaMiviotFormateada() {
+    final raw = _miviotResult?.ultimaActualizacion ??
+        (_checkResult?.tramiteMiviot != null ? _checkResult!.tramiteMiviot!['ultima_actualizacion'] as String? : null);
+    if (raw == null || raw.isEmpty) {
+      final now = DateTime.now();
+      final dia = now.day.toString().padLeft(2, '0');
+      final mes = now.month.toString().padLeft(2, '0');
+      final anio = now.year;
+      final hora = now.hour.toString().padLeft(2, '0');
+      final min = now.minute.toString().padLeft(2, '0');
+      return '$dia/$mes/$anio $hora:$min';
+    }
+    try {
+      final dt = DateTime.parse(raw).toLocal();
+      final dia = dt.day.toString().padLeft(2, '0');
+      final mes = dt.month.toString().padLeft(2, '0');
+      final anio = dt.year;
+      final hora = dt.hour.toString().padLeft(2, '0');
+      final min = dt.minute.toString().padLeft(2, '0');
+      return '$dia/$mes/$anio $hora:$min';
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  Widget _buildBotonActualizarMiviot() {
+    final fecha = _obtenerFechaMiviotFormateada();
+
+    return InkWell(
+      onTap: _reintentandoMiviot ? null : _reintentarSoloMiviot,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F8E9), // Verde suave institucional
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF2E7D32), width: 1.2),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_reintentandoMiviot) ...[
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1B5E20)),
+              ),
+              const SizedBox(width: 10),
+              const Flexible(
+                child: Text(
+                  'Consultando MIVIOT en vivo...',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1B5E20),
+                  ),
+                ),
+              ),
+            ] else ...[
+              const Icon(Icons.sync_rounded, size: 18, color: Color(0xFF1B5E20)),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'fecha de actualizacion: $fecha - Volver a consultar',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1B5E20),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

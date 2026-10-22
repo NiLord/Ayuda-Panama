@@ -143,6 +143,7 @@ def lambda_handler(event: dict, context) -> dict:
 
         # 3. Consultar estado del trámite en MIVIOT (Cache en MiviotTramitesTable o Scraper)
         tramite_miviot = None
+        now_iso = datetime.now(timezone.utc).isoformat()
         try:
             resp_miviot = miviot_table.get_item(Key={"PK": f"CEDULA#{norm_cedula}"})
             cached_item = resp_miviot.get("Item")
@@ -158,6 +159,7 @@ def lambda_handler(event: dict, context) -> dict:
                     "verificado_inexistente": False,
                     "es_timeout": False,
                     "error": None,
+                    "ultima_actualizacion": cached_item.get("ultima_actualizacion") or now_iso,
                 }
                 if "MIVIOT" not in sistemas_encontrados:
                     sistemas_encontrados.append("MIVIOT")
@@ -167,6 +169,7 @@ def lambda_handler(event: dict, context) -> dict:
                     "verificado_inexistente": True,
                     "es_timeout": False,
                     "error": None,
+                    "ultima_actualizacion": cached_item.get("ultima_actualizacion") or now_iso,
                     "mensaje": "El MIVIOT certificó que no hay expediente para esta cédula.",
                 }
             else:
@@ -183,6 +186,7 @@ def lambda_handler(event: dict, context) -> dict:
                         "verificado_inexistente": False,
                         "es_timeout": False,
                         "error": None,
+                        "ultima_actualizacion": now_iso,
                     }
                     if "MIVIOT" not in sistemas_encontrados:
                         sistemas_encontrados.append("MIVIOT")
@@ -195,7 +199,7 @@ def lambda_handler(event: dict, context) -> dict:
                         "fecha_recibido": res_miviot.fecha_recibido,
                         "paso_actual": res_miviot.paso_actual,
                         "estado_actual": res_miviot.estado_actual,
-                        "ultima_actualizacion": datetime.now(timezone.utc).isoformat(),
+                        "ultima_actualizacion": now_iso,
                     })
                 elif res_miviot.error:
                     # Ocurrió error o timeout: NO guardar como 'inexistente'
@@ -205,6 +209,7 @@ def lambda_handler(event: dict, context) -> dict:
                         "es_timeout": res_miviot.es_timeout,
                         "error": res_miviot.error,
                         "puede_reintentar": True,
+                        "ultima_actualizacion": res_miviot.timestamp_consulta or now_iso,
                         "mensaje": res_miviot.mensaje,
                     }
                 else:
@@ -215,13 +220,14 @@ def lambda_handler(event: dict, context) -> dict:
                         "es_timeout": False,
                         "error": None,
                         "puede_reintentar": False,
+                        "ultima_actualizacion": now_iso,
                         "mensaje": res_miviot.mensaje or "Sin expediente registrado en MIVIOT",
                     }
                     miviot_table.put_item(Item={
                         "PK": f"CEDULA#{norm_cedula}",
                         "encontrado": False,
                         "verificado_inexistente": True,
-                        "ultima_actualizacion": datetime.now(timezone.utc).isoformat(),
+                        "ultima_actualizacion": now_iso,
                         "ttl_expiration": int((datetime.now(timezone.utc) + timedelta(hours=4)).timestamp()),
                     })
         except Exception as e:
