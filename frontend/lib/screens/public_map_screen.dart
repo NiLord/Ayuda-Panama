@@ -164,15 +164,15 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
     }
 
     // 2. Determinar si se consulta a AWS (delta o carga inicial)
-    final hasSinaproc = cachedFeaturesMap.values.any((f) {
+    final sinaprocCount = cachedFeaturesMap.values.where((f) {
       if (f is Map<String, dynamic>) {
         final p = f['properties'] as Map<String, dynamic>?;
         return p?['fuente'] == 'SINAPROC';
       }
       return false;
-    });
+    }).length;
 
-    bool debeConsultarAws = esRefrescoManual || cachedFeaturesMap.isEmpty || !hasSinaproc;
+    bool debeConsultarAws = esRefrescoManual || cachedFeaturesMap.isEmpty || sinaprocCount < 20;
     if (!debeConsultarAws && _ultimoRefresco != null) {
       final diffMinutos = DateTime.now().difference(_ultimoRefresco!).inMinutes;
       if (diffMinutos >= AppConfig.publicMonitoringCacheMinutes) {
@@ -181,13 +181,15 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
     }
 
     if (debeConsultarAws) {
-      final sinceParam = (esRefrescoManual || !hasSinaproc || cachedFeaturesMap.isEmpty || _ultimoRefresco == null)
+      final sinceParam = (esRefrescoManual || sinaprocCount < 20 || cachedFeaturesMap.isEmpty || _ultimoRefresco == null)
           ? null
           : _ultimoRefresco!.toUtc().toIso8601String();
 
+      debugPrint('🗺️ [MAP] Solicitando reportes a la API... (manual: $esRefrescoManual, sinaprocCount: $sinaprocCount, since: $sinceParam)');
       final geojson = await ApiService.fetchPublicReports(since: sinceParam);
       if (geojson != null && geojson['features'] is List) {
         final features = geojson['features'] as List<dynamic>;
+        debugPrint('📦 [MAP] Features recibidos de la API: ${features.length}');
         for (final f in features) {
           if (f is Map<String, dynamic>) {
             final props = f['properties'] as Map<String, dynamic>? ?? {};
@@ -203,6 +205,9 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
         _ultimoRefresco = DateTime.now();
         await prefs.setString(_keyPublicCache, jsonEncode(cachedFeaturesMap.values.toList()));
         await prefs.setString(_keyLastFetch, _ultimoRefresco!.toUtc().toIso8601String());
+        debugPrint('💾 [MAP] Caché consolidado persistido: ${cachedFeaturesMap.length} items');
+      } else {
+        debugPrint('❌ [MAP] La respuesta de la API fue nula o no contiene features');
       }
     }
 
@@ -321,12 +326,14 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
 
     final sortedList = itemsMap.values.toList();
     sortedList.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    debugPrint('📊 [MAP] Total reportes consolidados en memoria: ${sortedList.length}');
 
     if (mounted) {
       setState(() {
         _reportes = sortedList;
         _cargando = false;
       });
+      debugPrint('🎨 [MAP] Vista actualizada con ${_reportes.length} reportes');
     }
   }
 

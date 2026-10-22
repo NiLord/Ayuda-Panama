@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../models/disaster_report.dart';
@@ -29,25 +30,33 @@ class ApiService {
     if (apiSecret.isNotEmpty) 'x-app-secret': apiSecret,
   };
 
-  /// Ejecuta GET con fallback automático a AWS API Gateway si el dominio personalizado falla
+  /// Ejecuta GET con fallback automático a AWS API Gateway si el dominio personalizado falla o da error
   static Future<http.Response> _getWithFallback(
     String pathAndQuery, {
     Map<String, String>? headers,
     Duration timeout = const Duration(seconds: 10),
   }) async {
     final primaryUri = Uri.parse('${AppConfig.apiBaseUrl}$pathAndQuery');
+    debugPrint('🌐 [API GET] Intentando: $primaryUri');
     try {
       final res = await http.get(primaryUri, headers: headers).timeout(timeout);
-      if (res.statusCode != 521 && res.statusCode != 502 && res.statusCode != 503 && res.statusCode != 504) {
+      debugPrint('📡 [API GET] Código devuelto por $primaryUri: ${res.statusCode}');
+      if (res.statusCode == 200 || res.statusCode == 201) {
         return res;
       }
-    } catch (_) {}
+      debugPrint('⚠️ [API GET] Código no exitoso (${res.statusCode}) desde dominio principal. Activando fallback a AWS...');
+    } catch (e) {
+      debugPrint('⚠️ [API GET] Error en endpoint principal: $e');
+    }
 
     final fallbackUri = Uri.parse('${AppConfig.httpApiRawEndpoint}$pathAndQuery');
-    return await http.get(fallbackUri, headers: headers).timeout(timeout);
+    debugPrint('🔄 [API GET FALLBACK] Consultando endpoint directo: $fallbackUri');
+    final fallbackRes = await http.get(fallbackUri, headers: headers).timeout(timeout);
+    debugPrint('✅ [API GET FALLBACK] Código recibido: ${fallbackRes.statusCode} (${fallbackRes.body.length} bytes)');
+    return fallbackRes;
   }
 
-  /// Ejecuta POST con fallback automático a AWS API Gateway si el dominio personalizado falla
+  /// Ejecuta POST con fallback automático a AWS API Gateway si el dominio personalizado falla o da error
   static Future<http.Response> _postWithFallback(
     String pathAndQuery, {
     Map<String, String>? headers,
@@ -57,7 +66,7 @@ class ApiService {
     final primaryUri = Uri.parse('${AppConfig.apiBaseUrl}$pathAndQuery');
     try {
       final res = await http.post(primaryUri, headers: headers, body: body).timeout(timeout);
-      if (res.statusCode != 521 && res.statusCode != 502 && res.statusCode != 503 && res.statusCode != 504) {
+      if (res.statusCode == 200 || res.statusCode == 201) {
         return res;
       }
     } catch (_) {}
