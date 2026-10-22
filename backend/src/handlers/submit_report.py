@@ -5,10 +5,11 @@ asigna prioridad de triage humanitario, actualiza la reputación del informante
 y persiste el reporte completo en Amazon DynamoDB.
 """
 
+from datetime import datetime, timezone
+from decimal import Decimal
 import json
 import os
 import uuid
-from datetime import datetime, timezone
 import boto3
 
 from ..models.disaster_assessment import (
@@ -211,7 +212,10 @@ def lambda_handler(event: dict, context) -> dict:
         report_dict["SK"] = f"METADATA#{timestamp}"
         report_dict["GSI1PK"] = f"PROVINCIA#{ubicacion.provincia}#DISTRITO#{ubicacion.distrito}"
         report_dict["GSI1SK"] = f"PRIORIDAD#{prioridad.value}#{timestamp}"
-        reports_table.put_item(Item=report_dict)
+        
+        # Convertir floats a Decimal para compatibilidad estricta con DynamoDB
+        dynamo_item = json.loads(json.dumps(report_dict), parse_float=Decimal)
+        reports_table.put_item(Item=dynamo_item)
 
         # 2. Actualizar contador atómico de reputación del informante
         try:

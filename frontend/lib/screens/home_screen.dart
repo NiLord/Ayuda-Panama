@@ -33,18 +33,30 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _sincronizarCola() async {
+    final pendientesAntes = _pendingReports;
     setState(() => _sincronizando = true);
     final count = await OfflineQueueService.flushQueue();
     await _actualizarEstado();
     setState(() => _sincronizando = false);
 
     if (mounted) {
+      String mensaje;
+      Color color;
+      if (count > 0) {
+        mensaje = 'Se sincronizaron $count reporte(s) exitosamente con AWS.';
+        color = Colors.green;
+      } else if (pendientesAntes == 0) {
+        mensaje = 'No hay reportes pendientes por sincronizar.';
+        color = Colors.blue;
+      } else {
+        mensaje = 'No fue posible sincronizar los reportes pendientes. Verifica tu conexión.';
+        color = Colors.orange;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(count > 0
-              ? 'Se sincronizaron $count reportes exitosamente con AWS.'
-              : 'No fue posible sincronizar. Verifica tu conexión.'),
-          backgroundColor: count > 0 ? Colors.green : Colors.orange,
+          content: Text(mensaje),
+          backgroundColor: color,
         ),
       );
     }

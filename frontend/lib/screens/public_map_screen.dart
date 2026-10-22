@@ -180,15 +180,27 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
   }
 
   Future<void> _sincronizarPendientes() async {
+    final pendientesAntes = await OfflineQueueService.getPendingCount();
     setState(() => _sincronizando = true);
     final count = await OfflineQueueService.flushQueue();
     if (mounted) {
+      String mensaje;
+      Color color;
+      if (count > 0) {
+        mensaje = 'Se sincronizaron $count reporte(s) con AWS exitosamente.';
+        color = Colors.green;
+      } else if (pendientesAntes == 0) {
+        mensaje = 'No hay reportes pendientes por sincronizar.';
+        color = Colors.blue;
+      } else {
+        mensaje = 'Sin conexión para sincronizar los reportes pendientes.';
+        color = Colors.orange;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(count > 0
-              ? 'Se sincronizaron $count reporte(s) con AWS exitosamente.'
-              : 'Sin conexión para sincronizar en este momento.'),
-          backgroundColor: count > 0 ? Colors.green : Colors.orange,
+          content: Text(mensaje),
+          backgroundColor: color,
         ),
       );
       setState(() => _sincronizando = false);
