@@ -193,7 +193,7 @@ class DisasterAssessment:
     necesidades_humanitarias: NecesidadesHumanitarias
     auditoria_kyc: AuditoriaDeviceKYC
     tipo_evento: str = "TERREMOTO"
-    codigo_evento: str = "TERREMOTO_LOS_SANTOS_2026"
+    codigo_evento: str = "SISMO_OCTUBRE_2026"
     metadatos_evento: Dict[str, Any] = field(default_factory=dict)
     evidencias_fotograficas: List[Dict[str, Any]] = field(default_factory=list)
     fotos_urls: List[str] = field(default_factory=list)

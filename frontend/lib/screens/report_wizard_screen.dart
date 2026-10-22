@@ -22,9 +22,10 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   int _currentStep = 0;
   bool _enviando = false;
 
-  // Multi-Evento Extensible
-  TipoEvento _tipoEvento = TipoEvento.terremoto;
-  String _codigoEvento = 'TERREMOTO_LOS_SANTOS_2026';
+  // Multi-Evento Extensible (Configurado por defecto a "Sismo Octubre 2026")
+  final String _tipoEvento = 'TERREMOTO';
+  final String _codigoEvento = 'SISMO_OCTUBRE_2026';
+  final String _nombreEvento = 'Sismo Octubre 2026';
 
   // Evidencias Fotográficas
   final ImagePicker _picker = ImagePicker();
@@ -349,10 +350,10 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
         reportId: 'rep_${const Uuid().v4()}',
         timestamp: DateTime.now().toUtc().toIso8601String(),
         consentimientoInformado: _consentimientoDado,
-        tipoEvento: _tipoEvento.value,
+        tipoEvento: _tipoEvento,
         codigoEvento: _codigoEvento,
         metadatosEvento: {
-          'tipo_evento_label': _tipoEvento.label,
+          'nombre_evento': _nombreEvento,
           'sistema_constructivo': _sistemaConstructivo,
           'tipo_inmueble': _tipoInmueble,
           'fuga_gas': _fugaGas,
@@ -574,46 +575,6 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Selector de Tipo de Catástrofe / Multi-Evento Extensible
-                Card(
-                  elevation: 0,
-                  color: Colors.red.shade50,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: Colors.red.shade200),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: DropdownButtonFormField<TipoEvento>(
-                      isExpanded: true,
-                      value: _tipoEvento,
-                      decoration: const InputDecoration(
-                        labelText: 'Tipo de Evento / Catástrofe',
-                        prefixIcon: Icon(Icons.crisis_alert, color: Colors.red),
-                        border: InputBorder.none,
-                      ),
-                      items: TipoEvento.values.map((ev) {
-                        return DropdownMenuItem(
-                          value: ev,
-                          child: Text(
-                            ev.label,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _tipoEvento = val;
-                            _codigoEvento = '${val.value}_PANAMA_2026';
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
                 // Banner de Estado GPS y Geocodificación
                 Card(
                   color: _autocompletadoOnline ? Colors.green.shade50 : Colors.amber.shade50,

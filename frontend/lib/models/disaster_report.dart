@@ -239,7 +239,7 @@ class DisasterReport {
     required this.timestamp,
     required this.consentimientoInformado,
     this.tipoEvento = 'TERREMOTO',
-    this.codigoEvento = 'TERREMOTO_LOS_SANTOS_2026',
+    this.codigoEvento = 'SISMO_OCTUBRE_2026',
     this.metadatosEvento = const {},
     required this.reporterId,
     required this.rolInformante,
@@ -414,7 +414,7 @@ class DisasterReport {
       timestamp: json['timestamp'] ?? '',
       consentimientoInformado: json['consentimiento_informado'] ?? true,
       tipoEvento: evt['tipo'] ?? json['tipo_evento'] ?? 'TERREMOTO',
-      codigoEvento: evt['codigo_evento'] ?? json['codigo_evento'] ?? 'TERREMOTO_LOS_SANTOS_2026',
+      codigoEvento: evt['codigo_evento'] ?? json['codigo_evento'] ?? 'SISMO_OCTUBRE_2026',
       metadatosEvento: evt['metadatos_evento'] as Map<String, dynamic>? ?? {},
       evidencias: (json['evidencias_fotograficas'] as List<dynamic>?)
               ?.map((e) => FotoEvidencia.fromJson(e as Map<String, dynamic>))

@@ -176,7 +176,7 @@ def lambda_handler(event: dict, context) -> dict:
         # Parsear evento extensible y evidencias fotográficas
         evento_data = payload.get("evento", {})
         tipo_evento = evento_data.get("tipo", payload.get("tipo_evento", "TERREMOTO"))
-        codigo_evento = evento_data.get("codigo_evento", payload.get("codigo_evento", "TERREMOTO_LOS_SANTOS_2026"))
+        codigo_evento = evento_data.get("codigo_evento", payload.get("codigo_evento", "SISMO_OCTUBRE_2026"))
         metadatos_evento = evento_data.get("metadatos_evento", payload.get("metadatos_evento", {}))
 
         evidencias_data = payload.get("evidencias_fotograficas", [])
