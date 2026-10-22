@@ -62,8 +62,16 @@ class MiviotAdapter:
                 timestamp_consulta=datetime.now(timezone.utc).isoformat(),
             )
 
+        import ssl
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+
         cookie_jar = http.cookiejar.CookieJar()
-        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(cookie_jar),
+            urllib.request.HTTPSHandler(context=ssl_ctx)
+        )
 
         try:
             # Fase 1: GET Handshake y extracción de csrf_token

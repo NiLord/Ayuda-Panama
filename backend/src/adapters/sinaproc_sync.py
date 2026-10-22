@@ -12,8 +12,13 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import json
 import logging
+import ssl
 import urllib.parse
 import urllib.request
+
+_SSL_CONTEXT = ssl.create_default_context()
+_SSL_CONTEXT.check_hostname = False
+_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 from typing import Dict, Any, List, Optional, Callable
 
 from ..utils.cedula_normalizer import normalize_cedula, mask_cedula, mask_person_name
@@ -184,7 +189,7 @@ def fetch_sinaproc_object_ids(
     req = urllib.request.Request(url, headers={"User-Agent": "AyudaPanama-Sync/1.1"})
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CONTEXT) as response:
             payload = json.loads(response.read().decode("utf-8"))
             return payload.get("objectIds") or []
     except Exception as e:
@@ -217,7 +222,7 @@ def fetch_sinaproc_chunk(
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CONTEXT) as response:
             payload = json.loads(response.read().decode("utf-8"))
             features = payload.get("features", [])
             return [f.get("attributes", {}) for f in features if "attributes" in f]

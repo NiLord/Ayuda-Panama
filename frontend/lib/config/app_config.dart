@@ -39,7 +39,7 @@ class DisasterEvent {
 /// Gestión centralizada de configuración de la aplicación
 /// Evita código 'quemado' y soporta sincronización remota desde AWS SSM
 class AppConfig {
-  static const String _defaultApiUrl = 'https://ayudapanama-api.fernandogonzalez.dev';
+  static const String _defaultApiUrl = '';
   static const String _defaultRawApiUrl = '';
   static const String _defaultPostalUrl = 'https://codigospostalespanama.gob.pa/api/location';
   static const String _defaultEventCode = 'SISMO_OCTUBRE_2026';

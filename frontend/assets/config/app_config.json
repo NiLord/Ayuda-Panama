@@ -1,6 +1,6 @@
 {
   "environment": "prod",
-  "apiBaseUrl": "https://ayudapanama-api.fernandogonzalez.dev",
+  "apiBaseUrl": "https://",
   "httpApiRawEndpoint": "https://",
   "apiKey": "",
   "apiSecret": "",
