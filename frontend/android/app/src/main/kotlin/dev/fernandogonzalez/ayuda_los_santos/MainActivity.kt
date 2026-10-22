@@ -1,4 +1,4 @@
-package pa.emergencia.ayuda_los_santos
+package dev.fernandogonzalez.ayuda_los_santos
 
 import io.flutter.embedding.android.FlutterActivity
 
