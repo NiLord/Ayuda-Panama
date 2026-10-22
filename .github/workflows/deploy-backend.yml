@@ -63,6 +63,9 @@ jobs:
             "lse-get-public-reports-${ENVIRONMENT}"
             "lse-get-upload-presign-${ENVIRONMENT}"
             "lse-export-edan-${ENVIRONMENT}"
+            "lse-check-duplicate-${ENVIRONMENT}"
+            "lse-get-miviot-tramite-${ENVIRONMENT}"
+            "lse-sync-sinaproc-${ENVIRONMENT}"
           )
           for fn in "${FUNCTIONS[@]}"; do
             echo "==> Actualizando código de $fn..."
