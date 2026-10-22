@@ -6,6 +6,7 @@ Uses unittest.mock to mock boto3 services (DynamoDB, S3) with zero external depe
 import unittest
 from unittest.mock import patch, MagicMock
 import json
+import os
 import sys
 
 # Mock boto3 and botocore before handler imports for zero-dependency local testing
@@ -200,24 +201,25 @@ class TestLambdaHandlers(unittest.TestCase):
         }
 
         # Intento sin clave: 401 Unauthorized
-        unauth_event = {"requestContext": {"http": {"method": "GET"}}, "headers": {}}
-        unauth_response = lambda_handler(unauth_event, None)
-        self.assertEqual(unauth_response["statusCode"], 401)
+        with patch.dict(os.environ, {"ADMIN_SECRET_KEY": "test-admin-key"}):
+            unauth_event = {"requestContext": {"http": {"method": "GET"}}, "headers": {}}
+            unauth_response = lambda_handler(unauth_event, None)
+            self.assertEqual(unauth_response["statusCode"], 401)
 
-        # Intento con clave autorizada
-        auth_event = {
-            "requestContext": {"http": {"method": "GET"}},
-            "headers": {"x-admin-key": "SinaprocEmergencia2026!"},
-        }
-        auth_response = lambda_handler(auth_event, None)
-        self.assertEqual(auth_response["statusCode"], 200)
+            # Intento con clave autorizada
+            auth_event = {
+                "requestContext": {"http": {"method": "GET"}},
+                "headers": {"x-admin-key": "test-admin-key"},
+            }
+            auth_response = lambda_handler(auth_event, None)
+            self.assertEqual(auth_response["statusCode"], 200)
 
-        esri_result = json.loads(auth_response["body"])
-        self.assertIn("features", esri_result)
-        feature = esri_result["features"][0]
-        attrs = feature["attributes"]
-        self.assertEqual(attrs["evaluador"], "Evaluador Oficial")
-        self.assertEqual(attrs["nombre_jefe"], "Pedro Martínez")
+            esri_result = json.loads(auth_response["body"])
+            self.assertIn("features", esri_result)
+            feature = esri_result["features"][0]
+            attrs = feature["attributes"]
+            self.assertEqual(attrs["evaluador"], "Evaluador Oficial")
+            self.assertEqual(attrs["nombre_jefe"], "Pedro Martínez")
         self.assertEqual(attrs["cedula"], "7-55-444")
         self.assertEqual(attrs["c_embarazadas"], 1.0)
         self.assertEqual(attrs["colchon_doble"], 2.0)

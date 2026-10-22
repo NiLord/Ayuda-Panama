@@ -5,6 +5,7 @@ Exporta los reportes recopilados al formato exacto del FeatureServer de SINAPROC
 Ruta protegida para cuerpos de rescate y autoridades autorizadas.
 """
 
+import hmac
 import json
 import os
 import boto3
@@ -52,10 +53,11 @@ def lambda_handler(event: dict, context) -> dict:
         return build_response(200, {"message": "OK"})
 
     # Verificación de autenticación para salvaguardar PII
-    headers = event.get("headers", {})
+    headers = event.get("headers", {}) or {}
     provided_key = headers.get("x-admin-key") or headers.get("authorization", "").replace("Bearer ", "")
 
-    if provided_key != ADMIN_SECRET_KEY:
+    admin_key = os.environ.get("ADMIN_SECRET_KEY", ADMIN_SECRET_KEY)
+    if not admin_key or not provided_key or not hmac.compare_digest(provided_key, admin_key):
         return build_response(401, {
             "error": "Acceso denegado. Este endpoint con PII requiere autorización oficial de SINAPROC / COE."
         })
