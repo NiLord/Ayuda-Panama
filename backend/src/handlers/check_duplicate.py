@@ -13,6 +13,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 
 from ..utils.cedula_normalizer import normalize_cedula, mask_cedula
+from ..utils.geo_normalizer import homologar_evaluador
 from ..adapters.miviot_adapter import MiviotAdapter
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ def build_response(status_code: int, body: dict) -> dict:
     return {
         "statusCode": status_code,
         "headers": {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "Content-Type,X-Api-Key,X-App-Secret,Authorization",
             "Access-Control-Allow-Methods": "POST,OPTIONS",
@@ -107,12 +108,13 @@ def lambda_handler(event: dict, context) -> dict:
                 if "SINAPROC" not in sistemas_encontrados:
                     sistemas_encontrados.append("SINAPROC")
                 for it in ext_items:
+                    eval_name = homologar_evaluador(it.get("evaluador"))
                     detalles_reportes.append({
                         "fuente": "SINAPROC",
                         "external_id": it.get("external_id"),
                         "fecha": it.get("timestamp"),
                         "habitabilidad": it.get("habitabilidad"),
-                        "estado": f"Evaluación oficial de campo realizada por {it.get('evaluador', 'SINAPROC')}",
+                        "estado": f"Evaluación oficial de campo realizada por {eval_name}",
                     })
         except Exception as e:
             logger.warning("Error consultando GSI_Cedula en ExternalReportsTable: %s", str(e))

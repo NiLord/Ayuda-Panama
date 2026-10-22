@@ -30,30 +30,47 @@ class ApiService {
     if (apiSecret.isNotEmpty) 'x-app-secret': apiSecret,
   };
 
+  /// Helper para decodificar respuestas HTTP en UTF-8 garantizando la visualización correcta de tildes y caracteres especiales
+  static String _decodeBody(http.Response response) {
+    try {
+      return utf8.decode(response.bodyBytes);
+    } catch (_) {
+      return response.body;
+    }
+  }
+
   /// Ejecuta GET con fallback automático a AWS API Gateway si el dominio personalizado falla o da error
   static Future<http.Response> _getWithFallback(
     String pathAndQuery, {
     Map<String, String>? headers,
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = const Duration(seconds: 15),
   }) async {
     final primaryUri = Uri.parse('${AppConfig.apiBaseUrl}$pathAndQuery');
-    debugPrint('🌐 [API GET] Intentando: $primaryUri');
-    try {
-      final res = await http.get(primaryUri, headers: headers).timeout(timeout);
-      debugPrint('📡 [API GET] Código devuelto por $primaryUri: ${res.statusCode}');
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        return res;
+    final fallbackUri = Uri.parse('${AppConfig.httpApiRawEndpoint}$pathAndQuery');
+
+    if (primaryUri != fallbackUri) {
+      debugPrint('🌐 [API GET] Intentando: $primaryUri');
+      try {
+        final res = await http.get(primaryUri, headers: headers).timeout(const Duration(seconds: 3));
+        debugPrint('📡 [API GET] Código devuelto por $primaryUri: ${res.statusCode}');
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          return res;
+        }
+        debugPrint('⚠️ [API GET] Código no exitoso (${res.statusCode}) desde dominio principal. Activando fallback a AWS...');
+      } catch (e) {
+        debugPrint('⚠️ [API GET] Error en endpoint principal: $e');
       }
-      debugPrint('⚠️ [API GET] Código no exitoso (${res.statusCode}) desde dominio principal. Activando fallback a AWS...');
-    } catch (e) {
-      debugPrint('⚠️ [API GET] Error en endpoint principal: $e');
     }
 
-    final fallbackUri = Uri.parse('${AppConfig.httpApiRawEndpoint}$pathAndQuery');
     debugPrint('🔄 [API GET FALLBACK] Consultando endpoint directo: $fallbackUri');
-    final fallbackRes = await http.get(fallbackUri, headers: headers).timeout(timeout);
-    debugPrint('✅ [API GET FALLBACK] Código recibido: ${fallbackRes.statusCode} (${fallbackRes.body.length} bytes)');
-    return fallbackRes;
+    try {
+      final fallbackRes = await http.get(fallbackUri, headers: headers).timeout(timeout);
+      debugPrint('✅ [API GET FALLBACK] Código recibido: ${fallbackRes.statusCode} (${fallbackRes.body.length} bytes)');
+      return fallbackRes;
+    } catch (e) {
+      debugPrint('💥 [API GET FALLBACK ERROR]: $e');
+      rethrow;
+    }
   }
 
   /// Ejecuta POST con fallback automático a AWS API Gateway si el dominio personalizado falla o da error
@@ -104,10 +121,12 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+        return jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
       }
+      debugPrint('⚠️ [API fetchPublicReports] Status code: ${response.statusCode}');
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('💥 [API fetchPublicReports Error]: $e\n$st');
       return null;
     }
   }
@@ -138,10 +157,12 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+        return jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
       }
+      debugPrint('⚠️ [API fetchPublicReports] Status code: ${response.statusCode}');
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('💥 [API fetchPublicReports Error]: $e\n$st');
       return null;
     }
   }
@@ -209,10 +230,10 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
         return DuplicateCheckResult.fromJson(data);
       } else {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
         return DuplicateCheckResult(
           success: false,
           existeDuplicado: false,
@@ -252,7 +273,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
         return MiviotTramiteResult.fromJson(data);
       }
       return null;

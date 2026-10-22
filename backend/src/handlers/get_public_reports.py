@@ -43,7 +43,7 @@ def build_response(status_code: int, body: dict) -> dict:
     return {
         "statusCode": status_code,
         "headers": {
-            "Content-Type": "application/geo+json",
+            "Content-Type": "application/geo+json; charset=utf-8",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "Content-Type,X-Api-Key,X-App-Secret,Authorization",
             "Access-Control-Allow-Methods": "GET,OPTIONS",

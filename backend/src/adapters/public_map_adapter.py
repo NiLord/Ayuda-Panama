@@ -8,6 +8,12 @@ from decimal import Decimal
 from typing import Dict, Any, List, Optional
 from ..models.disaster_assessment import DisasterAssessment, NivelHabitabilidad
 from ..utils.cedula_normalizer import mask_cedula as normalizer_mask_cedula, mask_person_name as normalizer_mask_name
+from ..utils.geo_normalizer import (
+    homologar_provincia,
+    homologar_distrito,
+    format_clean_name,
+    homologar_evaluador,
+)
 
 
 def mask_cedula(cedula: str) -> str:
@@ -62,13 +68,13 @@ class PublicMapAdapter:
                 "habitabilidad": habitabilidad,
                 "riesgo_colapso": assessment.evaluacion_estructural.riesgo_colapso_inminente,
                 "tipo_inmueble": assessment.evaluacion_estructural.tipo_inmueble.value,
-                "provincia": assessment.ubicacion.provincia,
-                "distrito": assessment.ubicacion.distrito,
-                "corregimiento": assessment.ubicacion.corregimiento,
-                "comunidad_sector": assessment.ubicacion.comunidad_sector,
+                "provincia": homologar_provincia(assessment.ubicacion.provincia),
+                "distrito": homologar_distrito(assessment.ubicacion.distrito),
+                "corregimiento": format_clean_name(assessment.ubicacion.corregimiento),
+                "comunidad_sector": format_clean_name(assessment.ubicacion.comunidad_sector),
                 "accesibilidad_vial": assessment.ubicacion.accesibilidad_vial,
                 "total_ocupantes": assessment.censo_demografico.total_ocupantes,
-                "reporter_id": assessment.informante.reporter_id,
+                "reporter_id": homologar_evaluador(assessment.informante.reporter_id) if assessment.informante.reporter_id else "Residente",
                 "fotos_urls": assessment.fotos_urls,
                 "nombre_mascarado": mask_name(nombre_titular),
                 "cedula_mascarada": mask_cedula(cedula_titular),
@@ -99,6 +105,19 @@ class PublicMapAdapter:
         ext_id = item.get("external_id") or item.get("PK", "").replace("SINAPROC#", "")
         fuente = item.get("fuente", "SINAPROC")
 
+        ubicacion = item.get("ubicacion") or {}
+        provincia = homologar_provincia(ubicacion.get("provincia", "Los Santos"))
+        distrito = homologar_distrito(ubicacion.get("distrito", "Las Tablas"))
+        corregimiento = format_clean_name(ubicacion.get("corregimiento", ""))
+        comunidad_sector = format_clean_name(ubicacion.get("comunidad_sector", ""))
+        evaluador = homologar_evaluador(item.get("evaluador", "SINAPROC"))
+
+        total_ocupantes = item.get("total_afectados")
+        if total_ocupantes is None or not str(total_ocupantes).isdigit():
+            total_ocupantes = 1
+        else:
+            total_ocupantes = int(total_ocupantes)
+
         return {
             "type": "Feature",
             "geometry": {
@@ -116,13 +135,13 @@ class PublicMapAdapter:
                 "habitabilidad": habitabilidad,
                 "riesgo_colapso": habitabilidad in ["INHABITABLE", "COLAPSO_TOTAL"],
                 "tipo_inmueble": "RESIDENCIAL_CASA",
-                "provincia": item.get("ubicacion", {}).get("provincia", "Los Santos"),
-                "distrito": item.get("ubicacion", {}).get("distrito", "Las Tablas"),
-                "corregimiento": item.get("ubicacion", {}).get("corregimiento", ""),
-                "comunidad_sector": item.get("ubicacion", {}).get("comunidad_sector", ""),
+                "provincia": provincia,
+                "distrito": distrito,
+                "corregimiento": corregimiento,
+                "comunidad_sector": comunidad_sector,
                 "accesibilidad_vial": "TRANSITABLE",
-                "total_ocupantes": 1,
-                "reporter_id": item.get("evaluador", "SINAPROC"),
+                "total_ocupantes": total_ocupantes,
+                "reporter_id": evaluador,
                 "fotos_urls": [],
                 "nombre_mascarado": item.get("nombre_titular_censurado") or "Residente",
                 "cedula_mascarada": item.get("cedula_censurada") or "7-*****000",

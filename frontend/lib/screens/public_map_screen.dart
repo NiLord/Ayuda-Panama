@@ -65,11 +65,12 @@ class PublicMapScreen extends StatefulWidget {
 class _PublicMapScreenState extends State<PublicMapScreen> {
   bool _cargando = true;
   bool _sincronizando = false;
+  String? _mensajeError;
   List<ReportViewModel> _reportes = [];
   DateTime? _ultimoRefresco;
 
-  static const _keyPublicCache = 'lse_public_reports_cache';
-  static const _keyLastFetch = 'lse_public_reports_last_fetch';
+  static const _keyPublicCache = 'lse_public_reports_cache_v2';
+  static const _keyLastFetch = 'lse_public_reports_last_fetch_v2';
 
   // Filtros Nacionales
   String _filtroProvincia = 'TODAS';
@@ -128,6 +129,10 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
   }
 
   Future<void> _solicitarRefrescoManual() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyPublicCache);
+    await prefs.remove(_keyLastFetch);
+    _ultimoRefresco = null;
     await _cargarReportes(esRefrescoManual: true);
   }
 
@@ -203,11 +208,40 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
 
         // Persistir caché consolidado en SharedPreferences
         _ultimoRefresco = DateTime.now();
+        _mensajeError = null;
         await prefs.setString(_keyPublicCache, jsonEncode(cachedFeaturesMap.values.toList()));
         await prefs.setString(_keyLastFetch, _ultimoRefresco!.toUtc().toIso8601String());
         debugPrint('💾 [MAP] Caché consolidado persistido: ${cachedFeaturesMap.length} items');
       } else {
         debugPrint('❌ [MAP] La respuesta de la API fue nula o no contiene features');
+        _mensajeError = 'No se pudo conectar con el servidor de emergencias. Verifique su conexión a internet.';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      cachedFeaturesMap.isNotEmpty
+                          ? 'Sin conexión: no se pudieron actualizar los datos. Mostrando reportes guardados en caché.'
+                          : 'Sin conexión a internet. No fue posible consultar los reportes de emergencias.',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.red.shade800,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Reintentar',
+                textColor: Colors.white,
+                onPressed: _solicitarRefrescoManual,
+              ),
+            ),
+          );
+        }
       }
     }
 
@@ -578,16 +612,53 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                     onRefresh: _solicitarRefrescoManual,
                     child: filtered.isEmpty
                         ? ListView(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                             children: [
-                              SizedBox(height: MediaQuery.of(context).size.height * 0.2),
-                              Icon(Icons.shield_outlined, size: 64, color: Colors.grey.shade400),
-                              const SizedBox(height: 12),
-                              const Center(
+                              SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                              Icon(
+                                _mensajeError != null ? Icons.wifi_off_rounded : Icons.shield_outlined,
+                                size: 68,
+                                color: _mensajeError != null ? Colors.orange.shade700 : Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 16),
+                              Center(
                                 child: Text(
-                                  'No hay reportes que coincidan con los filtros.',
-                                  style: TextStyle(color: Colors.grey, fontSize: 16),
+                                  _mensajeError != null
+                                      ? 'Sin conexión al servidor'
+                                      : 'No hay reportes que coincidan con los filtros.',
+                                  style: TextStyle(
+                                    color: _mensajeError != null ? Colors.red.shade900 : Colors.grey.shade700,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
                                 ),
                               ),
+                              const SizedBox(height: 8),
+                              Center(
+                                child: Text(
+                                  _mensajeError != null
+                                      ? 'No se pudieron consultar los reportes en este momento. Verifique su conexión y deslice hacia abajo o pulse el botón para reintentar.'
+                                      : 'Intente cambiando los filtros de provincia o estado de habitabilidad.',
+                                  style: const TextStyle(color: Colors.grey, fontSize: 14),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              if (_mensajeError != null) ...[
+                                const SizedBox(height: 20),
+                                Center(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _solicitarRefrescoManual,
+                                    icon: const Icon(Icons.refresh_rounded),
+                                    label: const Text('Reintentar conexión'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF003882),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           )
                         : ListView.builder(
