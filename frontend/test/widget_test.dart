@@ -9,8 +9,9 @@ void main() {
     ));
 
     expect(find.text('Ayuda Los Santos'), findsOneWidget);
-    expect(find.text('Tu Nombre Completo'), findsOneWidget);
-    expect(find.text('Teléfono de Contacto (+507...)'), findsOneWidget);
+    expect(find.text('Tu Nombre Completo *'), findsOneWidget);
+    expect(find.text('Tu Cédula de Identidad Personal *'), findsOneWidget);
+    expect(find.text('Teléfono de Contacto (+507...) *'), findsOneWidget);
     expect(find.text('Comenzar'), findsOneWidget);
   });
 }
