@@ -10,15 +10,17 @@ class ApiService {
   /// URL base dinámica resuelta desde AppConfig (centralizada en AWS SSM)
   static String get baseUrl => AppConfig.apiBaseUrl;
 
-  static const String apiKey = String.fromEnvironment(
-    'API_KEY',
-    defaultValue: '',
-  );
+  static String get apiKey {
+    const envKey = String.fromEnvironment('API_KEY', defaultValue: '');
+    if (envKey.isNotEmpty) return envKey;
+    return AppConfig.apiKey;
+  }
 
-  static const String apiSecret = String.fromEnvironment(
-    'API_SECRET',
-    defaultValue: '',
-  );
+  static String get apiSecret {
+    const envSec = String.fromEnvironment('API_SECRET', defaultValue: '');
+    if (envSec.isNotEmpty) return envSec;
+    return AppConfig.apiSecret;
+  }
 
   /// Cabeceras de autenticación requeridas por el Lambda Authorizer de API Gateway
   static Map<String, String> get _authHeaders => {
@@ -27,17 +29,52 @@ class ApiService {
     if (apiSecret.isNotEmpty) 'x-app-secret': apiSecret,
   };
 
+  /// Ejecuta GET con fallback automático a AWS API Gateway si el dominio personalizado falla
+  static Future<http.Response> _getWithFallback(
+    String pathAndQuery, {
+    Map<String, String>? headers,
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final primaryUri = Uri.parse('${AppConfig.apiBaseUrl}$pathAndQuery');
+    try {
+      final res = await http.get(primaryUri, headers: headers).timeout(timeout);
+      if (res.statusCode != 521 && res.statusCode != 502 && res.statusCode != 503 && res.statusCode != 504) {
+        return res;
+      }
+    } catch (_) {}
+
+    final fallbackUri = Uri.parse('${AppConfig.httpApiRawEndpoint}$pathAndQuery');
+    return await http.get(fallbackUri, headers: headers).timeout(timeout);
+  }
+
+  /// Ejecuta POST con fallback automático a AWS API Gateway si el dominio personalizado falla
+  static Future<http.Response> _postWithFallback(
+    String pathAndQuery, {
+    Map<String, String>? headers,
+    Object? body,
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final primaryUri = Uri.parse('${AppConfig.apiBaseUrl}$pathAndQuery');
+    try {
+      final res = await http.post(primaryUri, headers: headers, body: body).timeout(timeout);
+      if (res.statusCode != 521 && res.statusCode != 502 && res.statusCode != 503 && res.statusCode != 504) {
+        return res;
+      }
+    } catch (_) {}
+
+    final fallbackUri = Uri.parse('${AppConfig.httpApiRawEndpoint}$pathAndQuery');
+    return await http.post(fallbackUri, headers: headers, body: body).timeout(timeout);
+  }
+
   /// Envía un reporte de desastre a AWS API Gateway
   static Future<bool> submitReport(DisasterReport report) async {
     try {
-      final url = Uri.parse('$baseUrl/api/v1/reports');
-      final response = await http
-          .post(
-            url,
-            headers: _authHeaders,
-            body: jsonEncode(report.toJson()),
-          )
-          .timeout(const Duration(seconds: 8));
+      final response = await _postWithFallback(
+        '/api/v1/reports',
+        headers: _authHeaders,
+        body: jsonEncode(report.toJson()),
+        timeout: const Duration(seconds: 8),
+      );
 
       return response.statusCode == 201 || response.statusCode == 200;
     } catch (_) {
@@ -51,10 +88,11 @@ class ApiService {
       final queryParam = (since != null && since.isNotEmpty)
           ? '?since=${Uri.encodeComponent(since)}'
           : '';
-      final url = Uri.parse('$baseUrl/api/v1/reports/public$queryParam');
-      final response = await http
-          .get(url, headers: _authHeaders)
-          .timeout(const Duration(seconds: 10));
+      final response = await _getWithFallback(
+        '/api/v1/reports/public$queryParam',
+        headers: _authHeaders,
+        timeout: const Duration(seconds: 10),
+      );
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -75,7 +113,6 @@ class ApiService {
   }) async {
     try {
       final ext = extension.replaceAll('.', '').toLowerCase();
-      final url = Uri.parse('$baseUrl/api/v1/uploads/presign');
       final Map<String, dynamic> bodyData = {
         'report_id': reportId,
         'category': category,
@@ -84,13 +121,12 @@ class ApiService {
       if (photoId != null) bodyData['photo_id'] = photoId;
       if (fileName != null) bodyData['file_name'] = fileName;
 
-      final response = await http
-          .post(
-            url,
-            headers: _authHeaders,
-            body: jsonEncode(bodyData),
-          )
-          .timeout(const Duration(seconds: 8));
+      final response = await _postWithFallback(
+        '/api/v1/uploads/presign',
+        headers: _authHeaders,
+        body: jsonEncode(bodyData),
+        timeout: const Duration(seconds: 8),
+      );
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -156,14 +192,12 @@ class ApiService {
   /// Verifica en tiempo real si ya existe una evaluación previa para la cédula en la App o SINAPROC
   static Future<DuplicateCheckResult> checkCedulaDuplicate(String cedula) async {
     try {
-      final url = Uri.parse('$baseUrl/api/v1/reports/check-duplicate');
-      final response = await http
-          .post(
-            url,
-            headers: _authHeaders,
-            body: jsonEncode({'cedula': cedula}),
-          )
-          .timeout(const Duration(seconds: 12));
+      final response = await _postWithFallback(
+        '/api/v1/reports/check-duplicate',
+        headers: _authHeaders,
+        body: jsonEncode({'cedula': cedula}),
+        timeout: const Duration(seconds: 12),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -202,12 +236,11 @@ class ApiService {
   }) async {
     try {
       final forceParam = force ? '&force=true' : '';
-      final url = Uri.parse(
-        '$baseUrl/api/v1/tramites/miviot?cedula=${Uri.encodeComponent(cedula)}$forceParam',
+      final response = await _getWithFallback(
+        '/api/v1/tramites/miviot?cedula=${Uri.encodeComponent(cedula)}$forceParam',
+        headers: _authHeaders,
+        timeout: const Duration(seconds: 12),
       );
-      final response = await http
-          .get(url, headers: _authHeaders)
-          .timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
