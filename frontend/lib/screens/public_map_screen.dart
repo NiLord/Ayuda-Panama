@@ -25,6 +25,9 @@ class ReportViewModel {
   final bool isMyReport;
   final DisasterReport? fullReport;
   final List<String> fotosUrls;
+  final String nombreMascarado;
+  final String cedulaMascarada;
+  final List<String> sistemasVinculados;
 
   ReportViewModel({
     required this.reportId,
@@ -42,6 +45,9 @@ class ReportViewModel {
     required this.isMyReport,
     this.fullReport,
     this.fotosUrls = const [],
+    this.nombreMascarado = '',
+    this.cedulaMascarada = '',
+    this.sistemasVinculados = const ['APP'],
   });
 }
 
@@ -70,18 +76,44 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
   ReporterProfile? _myProfile;
 
   String get _textoUltimaActualizacion {
-    if (_ultimoRefresco == null) return 'Sin datos en caché';
+    if (_ultimoRefresco == null) return 'Sin datos sincronizados';
     final ahora = DateTime.now();
     final diff = ahora.difference(_ultimoRefresco!);
     if (diff.inSeconds < 60) {
-      return 'Actualizado hace ${diff.inSeconds} seg (Caché)';
+      return 'Actualizado hace ${diff.inSeconds} seg';
     } else if (diff.inMinutes < 60) {
-      return 'Actualizado hace ${diff.inMinutes} min (Caché)';
+      return 'Actualizado hace ${diff.inMinutes} min';
     } else {
       final hora = _ultimoRefresco!.hour.toString().padLeft(2, '0');
       final min = _ultimoRefresco!.minute.toString().padLeft(2, '0');
       return 'Actualizado a las $hora:$min';
     }
+  }
+
+  static String maskCedula(String? cedula) {
+    if (cedula == null || cedula.trim().isEmpty) return '';
+    final c = cedula.trim();
+    if (c.length <= 4) return '${c.substring(0, 1)}***${c.substring(c.length - 1)}';
+    final parts = c.split('-');
+    if (parts.length >= 3) {
+      return '${parts[0]}-***-${parts.last}';
+    } else if (parts.length == 2) {
+      final suffix = parts[1].length >= 3 ? parts[1].substring(parts[1].length - 3) : parts[1];
+      return '${parts[0]}-***-$suffix';
+    } else {
+      return '${c.substring(0, 2)}***${c.substring(c.length - 3)}';
+    }
+  }
+
+  static String maskName(String? name) {
+    if (name == null || name.trim().isEmpty) return '';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty) return '';
+    final first = parts[0][0].toUpperCase() + parts[0].substring(1).toLowerCase();
+    if (parts.length > 1 && parts[1].isNotEmpty) {
+      return '$first ${parts[1][0].toUpperCase()}.';
+    }
+    return first;
   }
 
   @override
@@ -223,6 +255,9 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
         isMyReport: true,
         fullReport: rep,
         fotosUrls: rep.fotosUrls,
+        nombreMascarado: maskName(rep.afectadoNombre),
+        cedulaMascarada: maskCedula(rep.documentoNumero),
+        sistemasVinculados: entry.isSynced ? ['APP', 'SINAPROC'] : ['APP'],
       );
     }
 
@@ -234,6 +269,13 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
 
       final isMine = _myProfile != null && (props['reporter_id'] == _myProfile!.reporterId);
       final remoteFotos = (props['fotos_urls'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+      final remoteSistemas = (props['sistemas_vinculados'] as List<dynamic>?)
+              ?.map((e) => e.toString().toUpperCase())
+              .toList() ??
+          ['APP', 'SINAPROC'];
+
+      final remoteNombre = (props['nombre_mascarado'] as String?) ?? '';
+      final remoteCedula = (props['cedula_mascarada'] as String?) ?? '';
 
       if (itemsMap.containsKey(repId)) {
         final existing = itemsMap[repId]!;
@@ -253,6 +295,9 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
           isMyReport: true,
           fullReport: existing.fullReport,
           fotosUrls: existing.fotosUrls.isNotEmpty ? existing.fotosUrls : remoteFotos,
+          nombreMascarado: existing.nombreMascarado.isNotEmpty ? existing.nombreMascarado : remoteNombre,
+          cedulaMascarada: existing.cedulaMascarada.isNotEmpty ? existing.cedulaMascarada : remoteCedula,
+          sistemasVinculados: remoteSistemas,
         );
       } else {
         itemsMap[repId] = ReportViewModel(
@@ -270,6 +315,9 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
           isSynced: true,
           isMyReport: isMine,
           fotosUrls: remoteFotos,
+          nombreMascarado: remoteNombre,
+          cedulaMascarada: remoteCedula,
+          sistemasVinculados: remoteSistemas,
         );
       }
     }
@@ -596,6 +644,34 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                                         ),
                                     ],
                                   ),
+                                  if (item.nombreMascarado.isNotEmpty || item.cedulaMascarada.isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blueGrey.shade50,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: Colors.blueGrey.shade200),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.badge_outlined, size: 15, color: Colors.blueGrey.shade700),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              'Titular: ${item.nombreMascarado.isNotEmpty ? item.nombreMascarado : 'Afectado'} • Cédula: ${item.cedulaMascarada.isNotEmpty ? item.cedulaMascarada : 'Registrada'}',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.blueGrey.shade900,
+                                             ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                   const SizedBox(height: 8),
 
                                   // Estado Estructural y Peligros
@@ -617,86 +693,72 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                                   ),
                                   const Divider(height: 16),
 
-                                  // Barra inferior: Badges de Estado (Nube vs Local) + Botón Editar
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  // Trazabilidad de Redes y Sistemas de Emergencia
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          // Badge de Sincronización Visual
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                            decoration: BoxDecoration(
-                                              color: item.isSynced ? Colors.green.shade50 : Colors.amber.shade50,
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: item.isSynced ? Colors.green.shade600 : Colors.orange.shade700,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  item.isSynced ? Icons.cloud_done : Icons.cloud_upload_outlined,
-                                                  size: 14,
-                                                  color: item.isSynced ? Colors.green.shade700 : Colors.orange.shade800,
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  item.isSynced ? 'En la Nube (AWS)' : 'Pendiente Local',
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: item.isSynced ? Colors.green.shade800 : Colors.orange.shade900,
-                                                 ),
-                                                ),
-                                              ],
+                                          const Text(
+                                            'Trazabilidad / Redes:',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.blueGrey,
                                             ),
                                           ),
-                                          if (item.isMyReport) ...[
-                                            const SizedBox(width: 6),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: Colors.blue.shade50,
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(color: Colors.blue.shade600),
+                                          if (item.isMyReport && item.fullReport != null)
+                                            OutlinedButton.icon(
+                                              style: OutlinedButton.styleFrom(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                visualDensity: VisualDensity.compact,
                                               ),
-                                              child: const Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.person, size: 12, color: Colors.blue),
-                                                  SizedBox(width: 3),
-                                                  Text(
-                                                    'Mío',
-                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue),
+                                              onPressed: () async {
+                                                await Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) => ReportWizardScreen(initialReport: item.fullReport),
                                                   ),
-                                                ],
-                                              ),
+                                                );
+                                                _cargarReportes();
+                                              },
+                                              icon: const Icon(Icons.edit, size: 14),
+                                              label: const Text('Editar', style: TextStyle(fontSize: 11)),
                                             ),
-                                          ],
                                         ],
                                       ),
-
-                                      // Acción de Edición (Habilitada para reportes creados por el usuario)
-                                      if (item.isMyReport && item.fullReport != null)
-                                        OutlinedButton.icon(
-                                          style: OutlinedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                            visualDensity: VisualDensity.compact,
+                                      const SizedBox(height: 6),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: [
+                                          _buildSystemBadge(
+                                            label: item.isSynced ? 'Reporte App' : 'Reporte App (Local)',
+                                            icon: item.isSynced ? Icons.cloud_done : Icons.phone_android,
+                                            active: true,
+                                            color: item.isSynced ? Colors.teal : Colors.amber.shade800,
                                           ),
-                                          onPressed: () async {
-                                            await Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) => ReportWizardScreen(initialReport: item.fullReport),
-                                              ),
-                                            );
-                                            // Recargar datos tras regresar de la edición
-                                            _cargarReportes();
-                                          },
-                                          icon: const Icon(Icons.edit, size: 15),
-                                          label: const Text('Editar', style: TextStyle(fontSize: 12)),
-                                        ),
+                                          _buildSystemBadge(
+                                            label: 'SINAPROC',
+                                            icon: Icons.shield,
+                                            active: item.sistemasVinculados.contains('SINAPROC'),
+                                            color: Colors.orange.shade800,
+                                          ),
+                                          _buildSystemBadge(
+                                            label: 'MIVIOT',
+                                            icon: Icons.domain,
+                                            active: item.sistemasVinculados.contains('MIVIOT'),
+                                            color: Colors.indigo.shade700,
+                                          ),
+                                          if (item.isMyReport)
+                                            _buildSystemBadge(
+                                              label: 'Mío',
+                                              icon: Icons.person,
+                                              active: true,
+                                              color: Colors.blue.shade700,
+                                            ),
+                                        ],
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -720,6 +782,48 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
         const SizedBox(width: 4),
         Text(text, style: const TextStyle(fontSize: 12)),
       ],
+    );
+  }
+
+  Widget _buildSystemBadge({
+    required String label,
+    required IconData icon,
+    required bool active,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: active ? color.withValues(alpha: 0.08) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: active ? color.withValues(alpha: 0.5) : Colors.grey.shade300,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            active ? icon : Icons.radio_button_unchecked,
+            size: 13,
+            color: active ? color : Colors.grey.shade400,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: active ? FontWeight.bold : FontWeight.normal,
+              color: active ? color : Colors.grey.shade500,
+            ),
+          ),
+          if (active) ...[
+            const SizedBox(width: 3),
+            Icon(Icons.check, size: 11, color: color),
+          ],
+        ],
+      ),
     );
   }
 }

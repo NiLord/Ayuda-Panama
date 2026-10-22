@@ -103,8 +103,8 @@ class TestLambdaHandlers(unittest.TestCase):
                         "telefono_contacto": "TELEFONO_PRIVADO_1234",
                     },
                     "titular_afectado": {
-                        "nombre_jefe_hogar": "JEFE_HOGAR_SECRETO",
-                        "documento_numero": "CEDULA_SECRETA_777",
+                        "nombre_jefe_hogar": "Fernando Perez Secreto",
+                        "documento_numero": "7-708-417",
                     },
                     "ubicacion": {
                         "coordenadas": {"lat": 7.62, "lng": -80.35},
@@ -137,13 +137,17 @@ class TestLambdaHandlers(unittest.TestCase):
         self.assertEqual(feature["properties"]["report_id"], "rep_999")
         self.assertEqual(feature["properties"]["habitabilidad"], "INHABITABLE")
         self.assertEqual(feature["properties"]["semaforo_color"], "#E74C3C")
+        self.assertEqual(feature["properties"]["nombre_mascarado"], "Fernando P.")
+        self.assertEqual(feature["properties"]["cedula_mascarada"], "7-***-417")
+        self.assertIn("APP", feature["properties"]["sistemas_vinculados"])
+        self.assertIn("SINAPROC", feature["properties"]["sistemas_vinculados"])
 
         # Verificar ausencia total de PII en el payload público
         raw_body = response["body"]
         self.assertNotIn("NOMBRE_SUPER_SECRETO", raw_body)
         self.assertNotIn("TELEFONO_PRIVADO_1234", raw_body)
-        self.assertNotIn("JEFE_HOGAR_SECRETO", raw_body)
-        self.assertNotIn("CEDULA_SECRETA_777", raw_body)
+        self.assertNotIn("Perez Secreto", raw_body)
+        self.assertNotIn("708", feature["properties"]["cedula_mascarada"])
 
         # Prueba con delta query parameter since
         delta_event = {

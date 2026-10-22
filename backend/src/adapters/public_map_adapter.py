@@ -8,6 +8,37 @@ from typing import Dict, Any, List
 from ..models.disaster_assessment import DisasterAssessment, NivelHabitabilidad
 
 
+def mask_cedula(cedula: str) -> str:
+    """Enmascara la cédula panameña (ej. 7-708-417 -> 7-***-417) para proteger PII según Ley 81"""
+    if not cedula or not isinstance(cedula, str):
+        return ""
+    c = cedula.strip()
+    if len(c) <= 4:
+        return c[:1] + "***" + c[-1:]
+    parts = c.split("-")
+    if len(parts) >= 3:
+        return f"{parts[0]}-***-{parts[-1]}"
+    elif len(parts) == 2:
+        suffix = parts[1][-3:] if len(parts[1]) >= 3 else parts[1]
+        return f"{parts[0]}-***-{suffix}"
+    else:
+        return f"{c[:2]}***{c[-3:]}"
+
+
+def mask_name(full_name: str) -> str:
+    """Enmascara el nombre dejando solo el primer nombre e inicial (ej. Fernando Gonzalez -> Fernando G.)"""
+    if not full_name or not isinstance(full_name, str):
+        return ""
+    parts = full_name.strip().split()
+    if not parts:
+        return ""
+    first_name = parts[0].capitalize()
+    if len(parts) > 1 and parts[1]:
+        initial = parts[1][0].upper()
+        return f"{first_name} {initial}."
+    return first_name
+
+
 class PublicMapAdapter:
     """Adaptador de visualización pública con anonimización total de PII"""
 
@@ -23,6 +54,13 @@ class PublicMapAdapter:
         """Convierte una evaluación en un Feature GeoJSON seguro sin PII"""
         habitabilidad = assessment.evaluacion_estructural.habitabilidad.value
         color = cls.COLOR_MAP.get(habitabilidad, "#95A5A6")
+
+        nombre_titular = assessment.titular_afectado.nombre_jefe_hogar or ""
+        cedula_titular = assessment.titular_afectado.documento_numero or ""
+
+        sistemas = assessment.metadatos_evento.get("sistemas_vinculados")
+        if not sistemas:
+            sistemas = ["APP", "SINAPROC"]
 
         return {
             "type": "Feature",
@@ -50,6 +88,9 @@ class PublicMapAdapter:
                 "total_ocupantes": assessment.censo_demografico.total_ocupantes,
                 "reporter_id": assessment.informante.reporter_id,
                 "fotos_urls": assessment.fotos_urls,
+                "nombre_mascarado": mask_name(nombre_titular),
+                "cedula_mascarada": mask_cedula(cedula_titular),
+                "sistemas_vinculados": sistemas,
                 "servicios_afectados": {
                     "agua_potable": assessment.servicios_vitales.agua_potable,
                     "electricidad": assessment.servicios_vitales.electricidad,

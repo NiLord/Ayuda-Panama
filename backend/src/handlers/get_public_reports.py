@@ -74,6 +74,10 @@ def lambda_handler(event: dict, context) -> dict:
                 ser_data = item.get("servicios_vitales", {})
                 nec_data = item.get("necesidades_humanitarias", {})
                 inf_data = item.get("informante", {})
+                tit_data = item.get("titular_afectado", {})
+                metadatos_evento = item.get("metadatos_evento", {})
+                sistemas = item.get("sistemas_vinculados") or metadatos_evento.get("sistemas_vinculados") or ["APP", "SINAPROC"]
+                metadatos_evento["sistemas_vinculados"] = sistemas
 
                 # Filtrar solo fotos de daños (no identificación/cédula PII)
                 raw_fotos = item.get("fotos_urls", [])
@@ -91,7 +95,11 @@ def lambda_handler(event: dict, context) -> dict:
                         reporter_id=inf_data.get("reporter_id", ""),
                         rol=RolInformante(inf_data.get("rol", RolInformante.AFECTADO_DIRECTO.value)),
                     ),
-                    titular_afectado=TitularAfectado(),
+                    titular_afectado=TitularAfectado(
+                        nombre_jefe_hogar=tit_data.get("nombre_jefe_hogar"),
+                        documento_numero=tit_data.get("documento_numero"),
+                    ),
+                    metadatos_evento=metadatos_evento,
                     ubicacion=Ubicacion(
                         coordenadas=Coordenadas(
                             lat=float(coords.get("lat", 7.625)),
