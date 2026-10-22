@@ -28,9 +28,13 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Instalar Dependencias de Pruebas
+        run: |
+          pip install pytest boto3
+
       - name: Ejecutar Suite de Pruebas Unitarias
         run: |
-          python3 -m unittest discover backend/tests
+          PYTHONPATH=. pytest backend/tests
 
   deploy:
     name: Desplegar Lambdas en AWS

@@ -1,4 +1,4 @@
-import pytest
+import unittest
 from unittest.mock import patch, MagicMock
 from backend.src.adapters.miviot_adapter import MiviotAdapter, MiviotConsultaResult
 
@@ -75,56 +75,53 @@ HTML_PHASE1 = """
 """
 
 
-def test_extract_csrf_token():
-    token = MiviotAdapter.extract_csrf_token(HTML_PHASE1)
-    assert token == "abc123csrfTokenSecretXYZ"
+class TestMiviotAdapter(unittest.TestCase):
+    def test_extract_csrf_token(self):
+        token = MiviotAdapter.extract_csrf_token(HTML_PHASE1)
+        self.assertEqual(token, "abc123csrfTokenSecretXYZ")
 
+    def test_parse_scenario_a_found(self):
+        result = MiviotAdapter.parse_response_html(HTML_ESCENARIO_A, "7-71-1473")
+        self.assertTrue(result.encontrado)
+        self.assertEqual(result.cedula, "7-71-1473")
+        self.assertEqual(result.reporte, "AFV/07877")
+        self.assertEqual(result.fecha_recibido, "12/10/2026")
+        self.assertEqual(result.paso_actual, 2)
+        self.assertEqual(result.estado_actual, "Evaluación Técnica en Sitio")
+        self.assertIsNone(result.error)
 
-def test_parse_scenario_a_found():
-    result = MiviotAdapter.parse_response_html(HTML_ESCENARIO_A, "7-71-1473")
-    assert result.encontrado is True
-    assert result.cedula == "7-71-1473"
-    assert result.reporte == "AFV/07877"
-    assert result.fecha_recibido == "12/10/2026"
-    assert result.paso_actual == 2
-    assert result.estado_actual == "Evaluación Técnica en Sitio"
-    assert result.error is None
+    def test_parse_scenario_b_not_found(self):
+        result = MiviotAdapter.parse_response_html(HTML_ESCENARIO_B, "8-123-456")
+        self.assertFalse(result.encontrado)
+        self.assertEqual(result.cedula, "8-123-456")
+        self.assertIsNone(result.reporte)
+        self.assertIn("No encontramos", result.mensaje)
 
+    def test_parse_scenario_c_invalid_format(self):
+        result = MiviotAdapter.parse_response_html(HTML_ESCENARIO_C, "invalid-id")
+        self.assertFalse(result.encontrado)
+        self.assertEqual(result.error, "FORMATO_INVALIDO")
 
-def test_parse_scenario_b_not_found():
-    result = MiviotAdapter.parse_response_html(HTML_ESCENARIO_B, "8-123-456")
-    assert result.encontrado is False
-    assert result.cedula == "8-123-456"
-    assert result.reporte is None
-    assert "No encontramos" in result.mensaje
+    @patch("urllib.request.build_opener")
+    def test_full_two_phase_flow_success(self, mock_build_opener):
+        # Mocking Phase 1 (GET) and Phase 2 (POST) responses
+        mock_opener = MagicMock()
+        mock_build_opener.return_value = mock_opener
 
+        resp_phase1 = MagicMock()
+        resp_phase1.read.return_value = HTML_PHASE1.encode("utf-8")
+        resp_phase1.__enter__.return_value = resp_phase1
 
-def test_parse_scenario_c_invalid_format():
-    result = MiviotAdapter.parse_response_html(HTML_ESCENARIO_C, "invalid-id")
-    assert result.encontrado is False
-    assert result.error == "FORMATO_INVALIDO"
+        resp_phase2 = MagicMock()
+        resp_phase2.read.return_value = HTML_ESCENARIO_A.encode("utf-8")
+        resp_phase2.__enter__.return_value = resp_phase2
 
+        mock_opener.open.side_effect = [resp_phase1, resp_phase2]
 
-@patch("urllib.request.build_opener")
-def test_full_two_phase_flow_success(mock_build_opener):
-    # Mocking Phase 1 (GET) and Phase 2 (POST) responses
-    mock_opener = MagicMock()
-    mock_build_opener.return_value = mock_opener
+        adapter = MiviotAdapter()
+        result = adapter.consultar_cedula("7-71-1473")
 
-    resp_phase1 = MagicMock()
-    resp_phase1.read.return_value = HTML_PHASE1.encode("utf-8")
-    resp_phase1.__enter__.return_value = resp_phase1
-
-    resp_phase2 = MagicMock()
-    resp_phase2.read.return_value = HTML_ESCENARIO_A.encode("utf-8")
-    resp_phase2.__enter__.return_value = resp_phase2
-
-    mock_opener.open.side_effect = [resp_phase1, resp_phase2]
-
-    adapter = MiviotAdapter()
-    result = adapter.consultar_cedula("7-71-1473")
-
-    assert result.encontrado is True
-    assert result.reporte == "AFV/07877"
-    assert result.paso_actual == 2
-    assert result.estado_actual == "Evaluación Técnica en Sitio"
+        self.assertTrue(result.encontrado)
+        self.assertEqual(result.reporte, "AFV/07877")
+        self.assertEqual(result.paso_actual, 2)
+        self.assertEqual(result.estado_actual, "Evaluación Técnica en Sitio")
