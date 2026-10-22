@@ -1,0 +1,109 @@
+{
+  "Bocas del Toro": {
+    "Almirante": ["Almirante", "Barrio Francés", "Cauchero", "Ceiba", "Miramar", "Nance de Riscó", "Valle de Aguas Arriba", "Valle de Riscó"],
+    "Bocas del Toro": ["Bocas del Toro", "Bastimentos", "Cauchero", "Punta Laurel", "Tierra Oscura"],
+    "Changuinola": ["Changuinola", "Barriada 4 de Abril", "Cochigró", "El Empalme", "El Silencio", "Guabito", "La Gloria", "Las Delicias", "Las Tablas", "Pueblo Nuevo"],
+    "Chiriquí Grande": ["Chiriquí Grande", "Bajo Cedro", "Miramar", "Punta Peña", "Punta Robalo", "Rambala"]
+  },
+  "Coclé": {
+    "Aguadulce": ["Aguadulce", "El Cristo", "El Roble", "Pocrí", "Barrios Unidos", "Virgen del Carmen", "El Hato de San Juan de Dios"],
+    "Antón": ["Antón", "Cabuya", "El Chirú", "El Retiro", "El Valle", "Juan Díaz", "Río Hato", "San Juan de Dios", "Santa Rita", "Caballero"],
+    "La Pintada": ["La Pintada", "El Harino", "El Potrero", "Llano Grande", "Piedras Gordas", "Las Lomas", "Llano Norte"],
+    "Natá": ["Natá", "Capellanía", "El Caño", "Guzmán", "Las Huacas", "Toza", "Villarreal"],
+    "Olá": ["Olá", "El Copé", "El Palmar", "El Picacho", "La Pava"],
+    "Penonomé": ["Penonomé", "Cañaveral", "Coclé", "Chiguirí Arriba", "El Coco", "Pajonal", "Río Grande", "Río Indio", "Toabré", "Tulú"]
+  },
+  "Colón": {
+    "Chagres": ["Nuevo Chagres", "Achiote", "El Guabo", "La Encantada", "Palmas Bellas", "Piña", "Salud"],
+    "Colón": ["Barrio Norte", "Barrio Sur", "Buena Vista", "Cativá", "Ciricito", "Cristóbal", "Cristóbal Este", "Escobal", "Limón", "Nueva Providencia", "Puerto Pilón", "Sabanitas", "Salamanca", "San Juan", "Santa Rosa"],
+    "Donoso": ["Miguel de la Borda", "Coclé del Norte", "El Guásimo", "Gobea", "Río Indio"],
+    "Portobelo": ["Portobelo", "Cacique", "Garrote", "Isla Grande", "María Chiquita"],
+    "Santa Isabel": ["Palenque", "Cuango", "Miramar", "Nombre de Dios", "Palmira", "Playa Chiquita", "Santa Isabel", "Viento Frío"],
+    "Omar Torrijos Herrera": ["San José del General", "San Juan de Turbe", "Nueva Esperanza"]
+  },
+  "Chiriquí": {
+    "Alanje": ["Alanje", "Canta Gallo", "Divalá", "El Tejar", "Guarumal", "Palo Grande", "Querévalos", "Santo Tomás"],
+    "Barú": ["Puerto Armuelles", "Baco", "Limones", "Progreso", "Rodolfo Aguilar Delgado"],
+    "Boquerón": ["Boquerón", "Bágala", "Cordillera", "Guabal", "Guayabal", "Paraíso", "Pedregal", "Tijeras"],
+    "Boquete": ["Bajo Boquete", "Caldera", "Alto Boquete", "Jaramillo", "Los Naranjos", "Palmira"],
+    "Bugaba": ["La Concepción", "Asunción", "Bugaba", "El Bongo", "Gómez", "La Estrella", "San Andrés", "Santa Marta", "Santa Rosa", "Santo Domingo", "Solano", "Sortová"],
+    "David": ["David", "Bijagual", "Cochea", "Chiriquí", "Guacá", "Las Lomas", "Pedregal", "San Carlos", "David Este", "David Sur"],
+    "Dolega": ["Dolega", "Dos Ríos", "Los Algarrobos", "Miranda", "Potrerillos", "Potrerillos Abajo", "Rovira", "Tinajas"],
+    "Gualaca": ["Gualaca", "Hornito", "Los Ángeles", "Paja de Sombrero", "Rincón"],
+    "Remedios": ["Remedios", "El Nancito", "El Porvenir", "El Puerto", "Santa Lucía"],
+    "Renacimiento": ["Río Sereno", "Breñón", "Cañas Gordas", "Dominical", "Monte Lirio", "Plaza de Caisán", "Santa Clara", "Santa Cruz"],
+    "San Félix": ["Las Lajas", "Juay", "San Félix", "Santa Cruz"],
+    "San Lorenzo": ["Horconcitos", "Boca Chica", "Boca del Monte", "San Juan", "San Lorenzo"],
+    "Tierras Altas": ["Volcán", "Cerro Punta", "Cuesta de Piedra", "Nueva California", "Paso Ancho"],
+    "Tolé": ["Tolé", "Bella Vista", "Cerro Viejo", "El Cristo", "Justo Fidel Palacios", "Lajas de Tolé", "Pampa Silva", "Quebrada de Piedra", "Veladero"]
+  },
+  "Darién": {
+    "Chepigana": ["La Palma", "Camoganti", "Chepigana", "Garachiné", "Jaqué", "Puerto Piña", "Sambú", "Setegantí", "Taimatí", "Tucutí"],
+    "Pinogana": ["El Real de Santa María", "Boca de Cupe", "Metetí", "Paya", "Pinogana", "Púcuro", "Yape", "Yaviza"],
+    "Santa Fe": ["Santa Fe", "Agua Fría", "Cucunatí", "Río Congo", "Río Congo Arriba", "Zapallal"],
+    "Sambu": ["Río Sabalo", "Jingurudo"]
+  },
+  "Herrera": {
+    "Chitré": ["Chitré", "La Arena", "Monagrillo", "Llano Bonito", "San Juan Bautista"],
+    "Las Minas": ["Las Minas", "Chepo", "Chumical", "El Toro", "Leones", "Quebrada del Rosario", "Quebrada El Ciprián"],
+    "Los Pozos": ["Los Pozos", "El Capurí", "El Calabacito", "El Cedro", "La Arena", "La Pitaloza", "Los Cerritos", "Los Cerros de Paja", "Las Llanas"],
+    "Ocú": ["Ocú", "Cerro Largo", "Los Llanos", "Llano Grande", "Peñas Chatas", "El Tijera", "Menchaca", "Entradero del Castillo"],
+    "Parita": ["Parita", "Cabuya", "Los Castillos", "Llano de la Cruz", "París", "Portobelillo", "Potuga"],
+    "Pesé": ["Pesé", "Las Cabras", "El Pájaro", "El Barrero", "El Pedregoso", "El Ciruelo", "Rincón Hondo", "Sabana Grande"],
+    "Santa María": ["Santa María", "Chupampa", "El Rincón", "El Limón", "Los Canelos"]
+  },
+  "Los Santos": {
+    "Guararé": ["Guararé", "El Espinal", "El Macano", "Guararé Arriba", "La Enea", "Las Trancas", "Llano Abajo", "Perales", "La Pasera", "Llano de Piedras"],
+    "Las Tablas": ["Las Tablas", "Bajo Corral", "Bayano", "El Carate", "El Cocal", "El Manantial", "El Muñoz", "El Pedregoso", "La Laja", "La Miel", "La Palma", "La Tisa", "Las Palmitas", "Las Tablas Abajo", "Nuario", "Palmira", "Peña Blanca", "San José", "San Miguel", "Santo Domingo", "Sesteadero", "Valle Rico", "Vallerriquito"],
+    "Los Santos": ["La Villa de Los Santos", "El Guásimo", "La Colorada", "La Espigadilla", "Las Cruces", "Las Guabas", "Los Ángeles", "Los Olivos", "Llano Largo", "Sabanagrande", "Santa Ana", "Tres Quebradas", "Villa Lourdes", "Agua Buena"],
+    "Macaracas": ["Macaracas", "Bahía Honda", "Bajos de Güera", "Corozal", "Chupá", "El Cedro", "Espino Amarillo", "La Mesa", "Llano de Piedras", "Las Palmas", "Mogollón"],
+    "Pedasí": ["Pedasí", "Los Asientos", "Mariabé", "Purio", "Oria Arriba"],
+    "Pocrí": ["Pocrí", "El Cañafístulo", "Lajamina", "Paraíso", "Paritilla"],
+    "Tonosí": ["Tonosí", "Altos de Güera", "Cañas", "El Bebedero", "El Cacao", "El Cortezo", "Flores", "Guánico", "La Tronosa", "Cambutal", "Isla de Cañas"]
+  },
+  "Panamá": {
+    "Balboa": ["San Miguel", "La Ensenada", "La Esmeralda", "La Guinea", "Pedro González", "Saboga"],
+    "Chepo": ["Chepo", "Cañita", "Chepillo", "El Llano", "Las Margaritas", "Santa Cruz de Chinina", "Madungandí", "Tortí"],
+    "Chimán": ["Chimán", "Brujas", "Gonzalo Vásquez", "Pásiga", "Unión Santeña"],
+    "Panamá": ["Ancón", "Bella Vista", "Betania", "Calidonia", "Curundú", "Chilibre", "El Chorrillo", "Juan Díaz", "Las Cumbres", "Pacora", "Parque Lefevre", "Pedregal", "Pueblo Nuevo", "Río Abajo", "San Felipe", "San Francisco", "San Martín", "Santa Ana", "Tocumen", "Alcalde Díaz", "Ernesto Córdoba Campos", "Caimitillo", "Las Garzas", "Don Bosco", "24 de Diciembre"],
+    "San Miguelito": ["Amelia Denis de Icaza", "Belisario Porras", "José Domingo Espinar", "Mateo Iturralde", "Victoriano Lorenzo", "Arnulfo Arias", "Belisario Frías", "Omar Torrijos", "Rufina Alfaro"],
+    "Taboga": ["Taboga", "Otoque Occidente", "Otoque Oriente"]
+  },
+  "Panamá Oeste": {
+    "Arraiján": ["Arraiján", "Burunga", "Cerro Silvestre", "Juan Demóstenes Arosemena", "Nuevo Emperador", "San Bernardino", "Santa Clara", "Veracruz", "Vista Alegre"],
+    "Capira": ["Capira", "Caimito", "Campana", "Cermeño", "Cirí de Los Sotos", "Cirí Grande", "El Cacao", "La Trinidad", "Las Ollas Arriba", "Lídice", "Villa Carmen", "Villa Rosario", "Santa Rosa"],
+    "Chame": ["Chame", "Bejuco", "Buenos Aires", "Cabuya", "Chicá", "El Líbano", "Las Lajas", "Nueva Gorgona", "Punta Chame", "Sora", "San José"],
+    "La Chorrera": ["Barrio Balboa", "Barrio Colón", "Amador", "Arosemena", "El Arado", "El Coco", "Feuillet", "Guadalupe", "Herrera", "Hurtado", "Iturralde", "La Represa", "Los Díaz", "Mendoza", "Obaldía", "Playa Leona", "Puerto Caimito", "Santa Rita"],
+    "San Carlos": ["San Carlos", "El Espino", "El Higo", "Guayabito", "La Ermita", "La Laguna", "Las Uvas", "Los Llanitos", "San José"]
+  },
+  "Veraguas": {
+    "Atalaya": ["Atalaya", "El Barrito", "La Montañuela", "San Antonio", "La Carrillo"],
+    "Calobre": ["Calobre", "Barnizal", "Chitra", "El Cocla", "El Potrero", "La Laguna", "La Raya de Calobre", "La Tetilla", "La Yeguada", "Las Guías", "Monjarás", "San José"],
+    "Cañazas": ["Cañazas", "Cerro de Plata", "El Aromillo", "Las Cruces", "Los Valles", "San José", "San Marcelo"],
+    "La Mesa": ["La Mesa", "Bisvalles", "Boró", "El Hondo", "Los Milagros", "San Bartolo"],
+    "Las Palmas": ["Las Palmas", "Cerro de Casa", "Corozal", "El María", "El Prado", "El Rincón", "Lolá", "Pelao", "Puerto Vidal", "San Martín de Porres", "Viguí", "Zapotillo"],
+    "Mariato": ["Mariato", "Arenas", "El Cacao", "Quebro", "Tebario"],
+    "Montijo": ["Montijo", "Gobernadora", "La Garceana", "Leones", "Pilón", "Cébaco", "Costa Hermosa", "Unión del Norte"],
+    "Río de Jesús": ["Río de Jesús", "Catorce de Noviembre", "Las Huacas", "Los Castillos", "Utira"],
+    "San Francisco": ["San Francisco", "Corral Falso", "Los Hatillos", "Remance", "San Juan", "San José"],
+    "Santa Fe": ["Santa Fe", "Calovébora", "El Alto", "El Cuay", "El Pantano", "Gatuncito", "Río Luis"],
+    "Santiago": ["Santiago", "Canto del Llano", "Carlos Santana Ávila", "Edwin Fábrega", "La Colorada", "La Peña", "La Raya de Santa María", "Ponuga", "San Pedro del Espino", "San Martín de Porres", "Urracá"],
+    "Soná": ["Soná", "Bahía Honda", "Calidonia", "Cativé", "El Marañón", "Guarumal", "La Soledad", "Quebrada de Oro", "Río Grande", "Rodeo Viejo", "Trinchera"]
+  },
+  "Guna Yala": {
+    "Guna Yala": ["Narganá", "Ailigandí", "Puerto Obaldía", "Tubualá"]
+  },
+  "Emberá-Wounaan": {
+    "Cémaco": ["Cirilo Guaynora", "Lajas Blancas", "Manuel Ortega"],
+    "Sambú": ["Jingurudó", "Río Sábalo"]
+  },
+  "Ngäbe-Buglé": {
+    "Besikó": ["Soloy", "Boca de Balsa", "Cerro Banco", "Cerro Patena", "Camarón Arriba", "Emplanada de Chorcha", "Niba"],
+    "Kankintú": ["Bisira", "Boca de Cricamola", "Burí", "Guariviara", "Man Creek", "Tuwai"],
+    "Kusapín": ["Kusapín", "Bahía Azul", "Cañaveral", "Río Chiriquí", "Tobobé"],
+    "Mironó": ["Hato Pilón", "Cascabel", "Hato Corotú", "Hato Culantro", "Hato Jobo", "Hato Julí", "Quebrada de Loro", "Salto Dupí"],
+    "Müna": ["Chichica", "Alto Caballero", "Bakama", "Cerro Caña", "Cerro Puerco", "Krua", "Maraca", "Nibagabiti", "Peña Blanca", "Risco", "Sitio Prado", "Umani"],
+    "Nole Düima": ["Cerro Iglesias", "Hato Chamí", "Jädeberi", "Lajero", "Susama"],
+    "Ñürüm": ["Buenos Aires", "Agua de Salud", "Alto de Jesús", "Cerro Pelado", "El Bale", "El Paredón", "El Piro", "Guayabito", "Güibale"]
+  }
+}
