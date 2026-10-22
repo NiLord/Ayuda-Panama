@@ -5,9 +5,11 @@ GeoJSON público unificado con semáforo de habitabilidad (ATC-20).
 Filtra y anonimiza el 100% de la información personal identificable (PII) según la Ley 81.
 """
 
+import base64
 import json
 import logging
 import os
+from typing import Optional, Dict, Any
 import boto3
 
 from ..models.disaster_assessment import (
@@ -39,6 +41,26 @@ reports_table = dynamodb.Table(REPORTS_TABLE_NAME)
 external_table = dynamodb.Table(EXTERNAL_REPORTS_TABLE_NAME)
 
 
+def encode_token(key_dict: Optional[dict]) -> Optional[str]:
+    if not key_dict:
+        return None
+    try:
+        raw_json = json.dumps(key_dict)
+        return base64.urlsafe_b64encode(raw_json.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return None
+
+
+def decode_token(token_str: Optional[str]) -> Optional[dict]:
+    if not token_str:
+        return None
+    try:
+        raw_json = base64.urlsafe_b64decode(token_str.encode("utf-8")).decode("utf-8")
+        return json.loads(raw_json)
+    except Exception:
+        return None
+
+
 def build_response(status_code: int, body: dict) -> dict:
     return {
         "statusCode": status_code,
@@ -60,27 +82,67 @@ def lambda_handler(event: dict, context) -> dict:
     try:
         query_params = event.get("queryStringParameters") or {}
         since_filter = query_params.get("since")
+        limit_param = query_params.get("limit")
+        page_size = min(max(int(limit_param), 1), 100) if limit_param and limit_param.isdigit() else 20
+        next_token_in = query_params.get("next_token")
+        exclusive_start_key = decode_token(next_token_in)
 
-        # 1. Escaneo de reportes ciudadanos de la App
-        if since_filter:
-            from boto3.dynamodb.conditions import Attr
-            response_app = reports_table.scan(
-                FilterExpression=Attr("timestamp").gt(since_filter),
-                Limit=300,
-            )
-        else:
-            response_app = reports_table.scan(Limit=300)
-
-        app_items = response_app.get("Items", [])
-
-        # 2. Escaneo de reportes oficiales de SINAPROC
-        ext_items = []
+        # 1. Total real acumulado de reportes en la plataforma consultado dinámicamente
+        total_sinaproc = 0
         try:
-            # En la vista pública unificada, asegurar la disponibilidad de los registros oficiales de SINAPROC
-            response_ext = external_table.scan(Limit=500)
-            ext_items = response_ext.get("Items", [])
-        except Exception as ext_err:
-            logger.warning("Error leyendo ExternalReportsTable: %s", str(ext_err))
+            st = external_table.get_item(Key={"PK": "CONFIG#SYNC_STATE", "SK": "SINAPROC"})
+            if isinstance(st, dict):
+                item_st = st.get("Item", {})
+                for key in ("total_registros", "total_historico", "total_items_procesados"):
+                    if key in item_st and str(item_st[key]).isdigit():
+                        total_sinaproc = int(item_st[key])
+                        break
+        except Exception as st_err:
+            logger.warning("Error leyendo total dinámico de SINAPROC: %s", str(st_err))
+
+        total_app = 0
+        try:
+            count_resp = reports_table.scan(Select="COUNT")
+            if isinstance(count_resp, dict):
+                total_app = int(count_resp.get("Count", 0))
+        except Exception as app_cnt_err:
+            logger.warning("Error contando reportes en ReportsTable: %s", str(app_cnt_err))
+
+        total_real = total_app + total_sinaproc
+
+        app_items = []
+        ext_items = []
+        next_token_out = None
+
+        if exclusive_start_key:
+            # Página subsiguiente: paginar exclusivamente ExternalReportsTable
+            scan_kwargs: Dict[str, Any] = {"Limit": page_size, "ExclusiveStartKey": exclusive_start_key}
+            if since_filter:
+                from boto3.dynamodb.conditions import Attr
+                scan_kwargs["FilterExpression"] = Attr("timestamp").gt(since_filter)
+            response_ext = external_table.scan(**scan_kwargs)
+            raw_ext = response_ext.get("Items", [])
+            ext_items = [it for it in raw_ext if not str(it.get("PK", "")).startswith("CONFIG#")]
+            next_token_out = encode_token(response_ext.get("LastEvaluatedKey"))
+        else:
+            # Primera página: obtener reportes ciudadanos primero y completar hasta page_size con SINAPROC
+            app_scan_kwargs: Dict[str, Any] = {"Limit": page_size}
+            if since_filter:
+                from boto3.dynamodb.conditions import Attr
+                app_scan_kwargs["FilterExpression"] = Attr("timestamp").gt(since_filter)
+            response_app = reports_table.scan(**app_scan_kwargs)
+            app_items = response_app.get("Items", [])
+
+            slots_left = page_size - len(app_items)
+            if slots_left > 0:
+                ext_scan_kwargs: Dict[str, Any] = {"Limit": slots_left}
+                if since_filter:
+                    from boto3.dynamodb.conditions import Attr
+                    ext_scan_kwargs["FilterExpression"] = Attr("timestamp").gt(since_filter)
+                response_ext = external_table.scan(**ext_scan_kwargs)
+                raw_ext = response_ext.get("Items", [])
+                ext_items = [it for it in raw_ext if not str(it.get("PK", "")).startswith("CONFIG#")]
+                next_token_out = encode_token(response_ext.get("LastEvaluatedKey"))
 
         assessments = []
         for item in app_items:
@@ -155,7 +217,12 @@ def lambda_handler(event: dict, context) -> dict:
                 logger.warning("Error procesando item: %s", str(parse_err))
                 continue
 
-        geojson = PublicMapAdapter.to_feature_collection(assessments=assessments, external_items=ext_items)
+        geojson = PublicMapAdapter.to_feature_collection(
+            assessments=assessments,
+            external_items=ext_items,
+            total_count=total_real,
+            next_token=next_token_out,
+        )
         return build_response(200, geojson)
 
     except Exception as e:

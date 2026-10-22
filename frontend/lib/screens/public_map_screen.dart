@@ -14,6 +14,7 @@ import '../widgets/miviot_tramite_dialog.dart';
 class ReportViewModel {
   final String reportId;
   final String timestamp;
+  final DateTime? fechaActualizacion;
   final String fuente;
   final String provincia;
   final String distrito;
@@ -35,6 +36,7 @@ class ReportViewModel {
   ReportViewModel({
     required this.reportId,
     required this.timestamp,
+    this.fechaActualizacion,
     this.fuente = 'APP',
     required this.provincia,
     required this.distrito,
@@ -64,8 +66,12 @@ class PublicMapScreen extends StatefulWidget {
 
 class _PublicMapScreenState extends State<PublicMapScreen> {
   bool _cargando = true;
+  bool _cargandoMas = false;
   bool _sincronizando = false;
   String? _mensajeError;
+  String? _nextToken;
+  int _totalReportesPlataforma = 0;
+  final ScrollController _scrollController = ScrollController();
   List<ReportViewModel> _reportes = [];
   DateTime? _ultimoRefresco;
 
@@ -125,7 +131,142 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _cargarReportes();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final currentScroll = _scrollController.position.pixels;
+      if (maxScroll - currentScroll <= 300) {
+        if (!_cargando && !_cargandoMas && _nextToken != null) {
+          _cargarMasReportes();
+        }
+      }
+    }
+  }
+
+  String _formatearFechaActualizacion(DateTime? dt, String rawTs) {
+    if (dt != null) {
+      final dia = dt.day.toString().padLeft(2, '0');
+      final mes = dt.month.toString().padLeft(2, '0');
+      final anio = dt.year;
+      final hora = dt.hour.toString().padLeft(2, '0');
+      final min = dt.minute.toString().padLeft(2, '0');
+      return 'Actualizado: $dia/$mes/$anio $hora:$min';
+    }
+    if (rawTs.isNotEmpty) {
+      try {
+        final parsed = DateTime.parse(rawTs).toLocal();
+        final dia = parsed.day.toString().padLeft(2, '0');
+        final mes = parsed.month.toString().padLeft(2, '0');
+        final anio = parsed.year;
+        final hora = parsed.hour.toString().padLeft(2, '0');
+        final min = parsed.minute.toString().padLeft(2, '0');
+        return 'Actualizado: $dia/$mes/$anio $hora:$min';
+      } catch (_) {}
+      return 'Actualizado: $rawTs';
+    }
+    return 'Actualización reciente';
+  }
+
+  ReportViewModel? _convertFeatureToViewModel(Map<String, dynamic> f) {
+    final props = f['properties'] as Map<String, dynamic>? ?? {};
+    final repId = (props['report_id'] ?? props['id'] ?? f['id']) as String? ?? '';
+    if (repId.isEmpty) return null;
+
+    final isMine = _myProfile != null && (props['reporter_id'] == _myProfile!.reporterId);
+    final fuente = (props['fuente'] as String?)?.toUpperCase() ?? 'APP';
+    final remoteFotos = (props['fotos_urls'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    final remoteSistemas = (props['sistemas_vinculados'] as List<dynamic>?)
+            ?.map((e) => e.toString().toUpperCase())
+            .toList() ??
+        [fuente];
+
+    final remoteNombre = (props['nombre_mascarado'] as String?) ?? '';
+    final remoteCedula = (props['cedula_mascarada'] as String?) ?? '';
+
+    DateTime? fechaAct;
+    final fechaStr = props['fecha_actualizacion'] ?? props['timestamp'];
+    if (fechaStr is String && fechaStr.isNotEmpty) {
+      try {
+        fechaAct = DateTime.parse(fechaStr).toLocal();
+      } catch (_) {}
+    }
+
+    return ReportViewModel(
+      reportId: repId,
+      timestamp: props['timestamp'] ?? '',
+      fechaActualizacion: fechaAct,
+      fuente: fuente,
+      provincia: props['provincia'] ?? 'Panamá',
+      distrito: props['distrito'] ?? '',
+      corregimiento: props['corregimiento'] ?? '',
+      comunidadSector: props['comunidad_sector'] ?? '',
+      habitabilidad: props['habitabilidad'] ?? 'DESCONOCIDO',
+      semaforoColorHex: props['semaforo_color'] ?? '#95A5A6',
+      prioridad: props['prioridad'] ?? 'P3',
+      riesgoColapso: props['riesgo_colapso'] ?? false,
+      requiereAlbergue: props['necesidades_urgentes']?['albergue'] ?? false,
+      isSynced: true,
+      isMyReport: isMine,
+      fotosUrls: remoteFotos,
+      nombreMascarado: remoteNombre,
+      cedulaMascarada: remoteCedula,
+      sistemasVinculados: remoteSistemas,
+    );
+  }
+
+  Future<void> _cargarMasReportes() async {
+    if (_cargandoMas || _nextToken == null) return;
+    setState(() => _cargandoMas = true);
+    debugPrint('📜 [MAP] Solicitando siguiente lote de 20 reportes (token: ${_nextToken!.substring(0, 15)}...)');
+
+    try {
+      final geojson = await ApiService.fetchPublicReports(
+        limit: 20,
+        nextToken: _nextToken,
+      );
+
+      if (geojson != null && geojson['features'] is List) {
+        final features = geojson['features'] as List<dynamic>;
+        _nextToken = geojson['next_token'] as String?;
+        if (geojson['total_count'] is int) {
+          _totalReportesPlataforma = geojson['total_count'] as int;
+        }
+
+        final List<ReportViewModel> nuevos = [];
+        for (final f in features) {
+          if (f is Map<String, dynamic>) {
+            final model = _convertFeatureToViewModel(f);
+            if (model != null) nuevos.add(model);
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            final existingIds = _reportes.map((r) => r.reportId).toSet();
+            final itemsToAdd = nuevos.where((n) => !existingIds.contains(n.reportId)).toList();
+            _reportes.addAll(itemsToAdd);
+            _cargandoMas = false;
+          });
+          debugPrint('✅ [MAP] Agregados ${nuevos.length} reportes adicionales. Total cargado: ${_reportes.length}');
+        }
+      } else {
+        if (mounted) setState(() => _cargandoMas = false);
+      }
+    } catch (e) {
+      debugPrint('💥 [MAP] Error cargando más reportes: $e');
+      if (mounted) setState(() => _cargandoMas = false);
+    }
   }
 
   Future<void> _solicitarRefrescoManual() async {
@@ -186,21 +327,25 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
     }
 
     if (debeConsultarAws) {
-      final sinceParam = (esRefrescoManual || sinaprocCount < 20 || cachedFeaturesMap.isEmpty || _ultimoRefresco == null)
-          ? null
-          : _ultimoRefresco!.toUtc().toIso8601String();
-
-      debugPrint('🗺️ [MAP] Solicitando reportes a la API... (manual: $esRefrescoManual, sinaprocCount: $sinaprocCount, since: $sinceParam)');
-      final geojson = await ApiService.fetchPublicReports(since: sinceParam);
+      debugPrint('🗺️ [MAP] Solicitando lote inicial de 20 reportes a la API... (manual: $esRefrescoManual)');
+      final geojson = await ApiService.fetchPublicReports(
+        limit: 20,
+      );
       if (geojson != null && geojson['features'] is List) {
         final features = geojson['features'] as List<dynamic>;
-        debugPrint('📦 [MAP] Features recibidos de la API: ${features.length}');
+        _nextToken = geojson['next_token'] as String?;
+        if (geojson['total_count'] is int) {
+          _totalReportesPlataforma = geojson['total_count'] as int;
+        }
+        debugPrint('📦 [MAP] Features recibidos de la API: ${features.length} | Total dinámico: $_totalReportesPlataforma | next_token: ${_nextToken != null}');
+        if (esRefrescoManual) {
+          cachedFeaturesMap.clear();
+        }
         for (final f in features) {
           if (f is Map<String, dynamic>) {
             final props = f['properties'] as Map<String, dynamic>? ?? {};
             final repId = (props['report_id'] ?? props['id'] ?? f['id']) as String? ?? '';
             if (repId.isNotEmpty) {
-              // Fusionar delta en el mapa del caché
               cachedFeaturesMap[repId] = f;
             }
           }
@@ -275,6 +420,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
       itemsMap[rep.reportId] = ReportViewModel(
         reportId: rep.reportId,
         timestamp: rep.timestamp,
+        fechaActualizacion: DateTime.tryParse(rep.timestamp)?.toLocal(),
         provincia: rep.provincia,
         distrito: rep.distrito,
         corregimiento: rep.corregimiento,
@@ -296,65 +442,11 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
 
     // 3.2 Agregar reportes remotos desde el caché consolidado
     for (final f in cachedFeaturesMap.values) {
-      final props = f['properties'] as Map<String, dynamic>? ?? {};
-      final repId = (props['report_id'] ?? props['id'] ?? f['id']) as String? ?? '';
-      if (repId.isEmpty) continue;
-
-      final isMine = _myProfile != null && (props['reporter_id'] == _myProfile!.reporterId);
-      final fuente = (props['fuente'] as String?)?.toUpperCase() ?? 'APP';
-      final remoteFotos = (props['fotos_urls'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-      final remoteSistemas = (props['sistemas_vinculados'] as List<dynamic>?)
-              ?.map((e) => e.toString().toUpperCase())
-              .toList() ??
-          [fuente];
-
-      final remoteNombre = (props['nombre_mascarado'] as String?) ?? '';
-      final remoteCedula = (props['cedula_mascarada'] as String?) ?? '';
-
-      if (itemsMap.containsKey(repId)) {
-        final existing = itemsMap[repId]!;
-        itemsMap[repId] = ReportViewModel(
-          reportId: existing.reportId,
-          timestamp: existing.timestamp,
-          fuente: existing.fuente,
-          provincia: existing.provincia,
-          distrito: existing.distrito,
-          corregimiento: existing.corregimiento,
-          comunidadSector: existing.comunidadSector,
-          habitabilidad: existing.habitabilidad,
-          semaforoColorHex: existing.semaforoColorHex,
-          prioridad: existing.prioridad,
-          riesgoColapso: existing.riesgoColapso,
-          requiereAlbergue: existing.requiereAlbergue,
-          isSynced: true, // Confirmado por AWS
-          isMyReport: true,
-          fullReport: existing.fullReport,
-          fotosUrls: existing.fotosUrls.isNotEmpty ? existing.fotosUrls : remoteFotos,
-          nombreMascarado: existing.nombreMascarado.isNotEmpty ? existing.nombreMascarado : remoteNombre,
-          cedulaMascarada: existing.cedulaMascarada.isNotEmpty ? existing.cedulaMascarada : remoteCedula,
-          sistemasVinculados: remoteSistemas,
-        );
-      } else {
-        itemsMap[repId] = ReportViewModel(
-          reportId: repId,
-          timestamp: props['timestamp'] ?? '',
-          fuente: fuente,
-          provincia: props['provincia'] ?? 'Panamá',
-          distrito: props['distrito'] ?? '',
-          corregimiento: props['corregimiento'] ?? '',
-          comunidadSector: props['comunidad_sector'] ?? '',
-          habitabilidad: props['habitabilidad'] ?? 'DESCONOCIDO',
-          semaforoColorHex: props['semaforo_color'] ?? '#95A5A6',
-          prioridad: props['prioridad'] ?? 'P3',
-          riesgoColapso: props['riesgo_colapso'] ?? false,
-          requiereAlbergue: props['necesidades_urgentes']?['albergue'] ?? false,
-          isSynced: true,
-          isMyReport: isMine,
-          fotosUrls: remoteFotos,
-          nombreMascarado: remoteNombre,
-          cedulaMascarada: remoteCedula,
-          sistemasVinculados: remoteSistemas,
-        );
+      if (f is Map<String, dynamic>) {
+        final model = _convertFeatureToViewModel(f);
+        if (model != null && !itemsMap.containsKey(model.reportId)) {
+          itemsMap[model.reportId] = model;
+        }
       }
     }
 
@@ -487,6 +579,36 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
               ],
             ),
           ),
+          // Conteo dinámico total de evaluaciones del sistema
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            color: Colors.white,
+            child: Row(
+              children: [
+                Icon(Icons.public, size: 16, color: Colors.blue.shade800),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _totalReportesPlataforma > 0
+                        ? 'Total Nacional: $_totalReportesPlataforma evaluaciones registradas (${_reportes.length} cargadas)'
+                        : 'Evaluaciones registradas: ${_reportes.length}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade900,
+                    ),
+                  ),
+                ),
+                if (_cargandoMas)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
           // Banner de Alerta si hay reportes pendientes
           if (pendientesCount > 0)
             Container(
@@ -559,7 +681,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
             child: Row(
               children: [
                 ChoiceChip(
-                  label: Text('Todos (${_reportes.length})'),
+                  label: Text(_totalReportesPlataforma > 0 ? 'Todos ($_totalReportesPlataforma)' : 'Todos (${_reportes.length})'),
                   selected: _filtroSincronizacion == 'TODOS',
                   onSelected: (_) => setState(() => _filtroSincronizacion = 'TODOS'),
                 ),
@@ -662,9 +784,33 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                             ],
                           )
                         : ListView.builder(
-                        itemCount: filtered.length,
+                        controller: _scrollController,
+                        itemCount: filtered.length + (_cargandoMas ? 1 : (_nextToken != null ? 1 : 0)),
                         padding: const EdgeInsets.all(12),
                         itemBuilder: (context, idx) {
+                          if (idx >= filtered.length) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                              child: Center(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Cargando más registros oficiales...',
+                                      style: TextStyle(fontSize: 13, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+
                           final item = filtered[idx];
                           Color statusColor;
                           try {
@@ -701,6 +847,21 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                                             Text(
                                               '${item.provincia} • ${item.corregimiento}',
                                               style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Row(
+                                              children: [
+                                                Icon(Icons.access_time_rounded, size: 12, color: Colors.blueGrey.shade600),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  _formatearFechaActualizacion(item.fechaActualizacion, item.timestamp),
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.blueGrey.shade700,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),

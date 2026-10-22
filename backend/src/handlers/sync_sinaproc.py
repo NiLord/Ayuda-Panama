@@ -119,8 +119,17 @@ def lambda_handler(event: dict, context) -> dict:
 
                     logger.info("Lote %d procesado: %d registros guardados (acumulado: %d)", chunk_idx, len(features), items_procesados)
 
-        # 3. Actualizar checkpoint de sincronización en DynamoDB
+        # 3. Actualizar checkpoint de sincronización en DynamoDB con total acumulado dinámico
         if max_timestamp_visto > last_sync_ms:
+            total_acumulado = total_ids if last_sync_ms == 0 else items_procesados
+            try:
+                prev_resp = external_table.get_item(Key={"PK": "CONFIG#SYNC_STATE", "SK": "SINAPROC"})
+                prev_item = prev_resp.get("Item", {})
+                if last_sync_ms > 0 and "total_registros" in prev_item:
+                    total_acumulado = int(prev_item["total_registros"]) + items_procesados
+            except Exception as st_err:
+                logger.warning("No se pudo leer total previo de registros: %s", str(st_err))
+
             try:
                 external_table.put_item(Item={
                     "PK": "CONFIG#SYNC_STATE",
@@ -128,8 +137,9 @@ def lambda_handler(event: dict, context) -> dict:
                     "last_sync_ms": max_timestamp_visto,
                     "last_sync_iso": datetime.now(timezone.utc).isoformat(),
                     "total_items_procesados": items_procesados,
+                    "total_registros": total_acumulado,
                 })
-                logger.info("Checkpoint de sincronización actualizado a %d", max_timestamp_visto)
+                logger.info("Checkpoint de sincronización actualizado a %d (total_registros: %d)", max_timestamp_visto, total_acumulado)
             except Exception as upd_err:
                 logger.warning("Error guardando checkpoint de sincronización: %s", str(upd_err))
 

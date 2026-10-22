@@ -108,16 +108,26 @@ class ApiService {
     }
   }
 
-  /// Consulta los reportes públicos verificados desde AWS (soporta delta con since)
-  static Future<Map<String, dynamic>?> fetchPublicReports({String? since}) async {
+  /// Consulta los reportes públicos verificados desde AWS (soporta paginación por lotes de 20 y cursor next_token)
+  static Future<Map<String, dynamic>?> fetchPublicReports({
+    String? since,
+    int limit = 20,
+    String? nextToken,
+  }) async {
     try {
-      final queryParam = (since != null && since.isNotEmpty)
-          ? '?since=${Uri.encodeComponent(since)}'
-          : '';
+      final queryParams = <String>['limit=$limit'];
+      if (since != null && since.isNotEmpty) {
+        queryParams.add('since=${Uri.encodeComponent(since)}');
+      }
+      if (nextToken != null && nextToken.isNotEmpty) {
+        queryParams.add('next_token=${Uri.encodeComponent(nextToken)}');
+      }
+      final queryString = '?${queryParams.join('&')}';
+
       final response = await _getWithFallback(
-        '/api/v1/reports/public$queryParam',
+        '/api/v1/reports/public$queryString',
         headers: _authHeaders,
-        timeout: const Duration(seconds: 10),
+        timeout: const Duration(seconds: 15),
       );
 
       if (response.statusCode == 200) {

@@ -63,6 +63,7 @@ class PublicMapAdapter:
                 "report_id": assessment.report_id,
                 "fuente": "APP",
                 "timestamp": assessment.timestamp,
+                "fecha_actualizacion": assessment.timestamp,
                 "prioridad": assessment.prioridad.value,
                 "semaforo_color": color,
                 "habitabilidad": habitabilidad,
@@ -130,6 +131,7 @@ class PublicMapAdapter:
                 "external_id": ext_id,
                 "fuente": fuente,
                 "timestamp": item.get("timestamp", ""),
+                "fecha_actualizacion": item.get("timestamp", ""),
                 "prioridad": "P2_URGENTE_ALBERGUE" if habitabilidad in ["INHABITABLE", "COLAPSO_TOTAL"] else "P3_MONITOREO_ENSERES",
                 "semaforo_color": color,
                 "habitabilidad": habitabilidad,
@@ -164,15 +166,24 @@ class PublicMapAdapter:
         cls,
         assessments: Optional[List[DisasterAssessment]] = None,
         external_items: Optional[List[Dict[str, Any]]] = None,
+        total_count: Optional[int] = None,
+        next_token: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Agrupa evaluaciones de la App y reportes externos en un FeatureCollection GeoJSON consolidado"""
+        """Agrupa evaluaciones de la App y reportes externos en un FeatureCollection GeoJSON consolidado con paginación y conteo global."""
         features = []
         if assessments:
             features.extend([cls.to_public_feature(a) for a in assessments])
         if external_items:
             features.extend([cls.to_public_feature_from_external(it) for it in external_items])
 
-        return {
+        result: Dict[str, Any] = {
             "type": "FeatureCollection",
             "features": features,
+            "count": len(features),
         }
+        if total_count is not None:
+            result["total_count"] = total_count
+        if next_token is not None:
+            result["next_token"] = next_token
+
+        return result
