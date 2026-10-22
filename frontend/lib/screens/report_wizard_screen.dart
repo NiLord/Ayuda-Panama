@@ -173,7 +173,12 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
 
   Future<void> _capturarFotoIdentificacion(ImageSource source) async {
     try {
-      final XFile? file = await _picker.pickImage(source: source, imageQuality: 85);
+      final XFile? file = await _picker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 80,
+      );
       if (file != null) {
         setState(() {
           _fotoIdentificacion = FotoEvidencia(
@@ -196,7 +201,12 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
 
   Future<void> _capturarFotoEstructura(ImageSource source) async {
     try {
-      final XFile? file = await _picker.pickImage(source: source, imageQuality: 85);
+      final XFile? file = await _picker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 80,
+      );
       if (file != null) {
         setState(() {
           _fotosEstructura.add(FotoEvidencia(
@@ -404,14 +414,41 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
       final referenciaNormalizada = PanamaTextNormalizer.normalize(_referenciaCtrl.text);
       final descripcionDanoNormalizada = PanamaTextNormalizer.normalize(_descripcionDanoCtrl.text);
 
-      // Consolidar evidencias fotográficas estructuradas
-      final todasLasEvidencias = <FotoEvidencia>[];
-      if (_fotoIdentificacion != null) todasLasEvidencias.add(_fotoIdentificacion!);
-      todasLasEvidencias.addAll(_fotosEstructura);
-      final fotosUrls = todasLasEvidencias.map((e) => e.rutaLocal).toList();
+      final reportId = widget.initialReport?.reportId ?? 'rep_${const Uuid().v4()}';
+
+      // Consolidar evidencias fotográficas estructuradas y subir fotos a S3
+      final evidenciasActualizadas = <FotoEvidencia>[];
+      final fotosUrls = <String>[];
+
+      final evidenciasLocales = <FotoEvidencia>[];
+      if (_fotoIdentificacion != null) evidenciasLocales.add(_fotoIdentificacion!);
+      evidenciasLocales.addAll(_fotosEstructura);
+
+      for (final ev in evidenciasLocales) {
+        String? remoteUrl = ev.urlRemota;
+        if ((remoteUrl == null || remoteUrl.isEmpty) && ev.rutaLocal.isNotEmpty) {
+          final category = ev.tipo == TipoFotoEvidencia.identificacion.value
+              ? 'identificacion'
+              : 'danos';
+          remoteUrl = await ApiService.uploadPhotoToS3(
+            reportId: reportId,
+            localPath: ev.rutaLocal,
+            category: category,
+            photoId: ev.id,
+          );
+        }
+
+        final evActualizada = ev.copyWith(urlRemota: remoteUrl);
+        evidenciasActualizadas.add(evActualizada);
+        if (remoteUrl != null && remoteUrl.isNotEmpty) {
+          fotosUrls.add(remoteUrl);
+        } else if (ev.rutaLocal.isNotEmpty) {
+          fotosUrls.add(ev.rutaLocal);
+        }
+      }
 
       final report = DisasterReport(
-        reportId: widget.initialReport?.reportId ?? 'rep_${const Uuid().v4()}',
+        reportId: reportId,
         timestamp: widget.initialReport?.timestamp ?? DateTime.now().toUtc().toIso8601String(),
         consentimientoInformado: _consentimientoDado,
         tipoEvento: _tipoEvento,
@@ -423,7 +460,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
           'fuga_gas': _fugaGas,
           'riesgo_colapso': _riesgoColapso,
         },
-        evidencias: todasLasEvidencias,
+        evidencias: evidenciasActualizadas,
         fotosUrls: fotosUrls,
         reporterId: profile.reporterId,
         rolInformante: profile.rol,

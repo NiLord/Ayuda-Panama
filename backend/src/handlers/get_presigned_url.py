@@ -41,13 +41,20 @@ def lambda_handler(event: dict, context) -> dict:
 
         payload = json.loads(raw_body) if isinstance(raw_body, str) else raw_body
 
-        file_extension = payload.get("extension", "jpg").lower().replace(".", "")
+        report_id = payload.get("report_id", "temp")
+        category = payload.get("category", "danos").lower()
+        if category not in ["danos", "identificacion", "infraestructura"]:
+            category = "danos"
+
+        file_extension = payload.get("extension")
+        if not file_extension and "file_name" in payload:
+            file_extension = payload["file_name"].split(".")[-1]
+        file_extension = (file_extension or "jpg").lower().replace(".", "")
         if file_extension not in ["jpg", "jpeg", "png", "webp"]:
             return build_response(400, {"error": "Formato no permitido. Solo se aceptan jpg, jpeg, png o webp"})
 
-        report_id = payload.get("report_id", "temp")
-        unique_id = uuid.uuid4().hex
-        s3_key = f"evidence/{report_id}/{unique_id}.{file_extension}"
+        photo_id = payload.get("photo_id") or uuid.uuid4().hex
+        s3_key = f"reports/{report_id}/{category}/{photo_id}.{file_extension}"
         content_type = f"image/{'jpeg' if file_extension in ['jpg', 'jpeg'] else file_extension}"
 
         presigned_url = s3_client.generate_presigned_url(
@@ -63,6 +70,7 @@ def lambda_handler(event: dict, context) -> dict:
         return build_response(200, {
             "upload_url": presigned_url,
             "s3_key": s3_key,
+            "category": category,
             "expires_in_seconds": 300,
             "final_resource_url": f"https://{EVIDENCE_BUCKET_NAME}.s3.amazonaws.com/{s3_key}",
         })

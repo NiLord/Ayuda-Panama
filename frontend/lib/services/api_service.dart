@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../models/disaster_report.dart';
@@ -61,24 +62,85 @@ class ApiService {
 
   /// Solicita una URL presignada para subir una foto de evidencia a S3
   static Future<Map<String, dynamic>?> getPresignedUploadUrl({
-    required String fileName,
-    required String contentType,
+    required String reportId,
+    required String category, // 'danos' o 'identificacion'
+    String extension = 'jpg',
+    String? photoId,
+    String? fileName,
   }) async {
     try {
+      final ext = extension.replaceAll('.', '').toLowerCase();
       final url = Uri.parse('$baseUrl/api/v1/uploads/presign');
+      final Map<String, dynamic> bodyData = {
+        'report_id': reportId,
+        'category': category,
+        'extension': ext,
+      };
+      if (photoId != null) bodyData['photo_id'] = photoId;
+      if (fileName != null) bodyData['file_name'] = fileName;
+
       final response = await http
           .post(
             url,
             headers: _authHeaders,
-            body: jsonEncode({
-              'file_name': fileName,
-              'content_type': contentType,
-            }),
+            body: jsonEncode(bodyData),
           )
           .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Sube un archivo local directamente a S3 usando la URL presignada
+  /// Retorna la URL pública final de la imagen en S3, o null si falla
+  static Future<String?> uploadPhotoToS3({
+    required String reportId,
+    required String localPath,
+    required String category,
+    String? photoId,
+  }) async {
+    try {
+      final file = File(localPath);
+      if (!await file.exists()) return null;
+
+      final extension = localPath.split('.').last.toLowerCase().replaceAll('.', '');
+      final presignData = await getPresignedUploadUrl(
+        reportId: reportId,
+        category: category,
+        extension: extension,
+        photoId: photoId,
+      );
+
+      if (presignData == null) return null;
+
+      final uploadUrl = presignData['upload_url'] as String?;
+      final finalResourceUrl = presignData['final_resource_url'] as String?;
+      if (uploadUrl == null) return null;
+
+      final bytes = await file.readAsBytes();
+      final mimeType = (extension == 'png')
+          ? 'image/png'
+          : (extension == 'webp')
+              ? 'image/webp'
+              : 'image/jpeg';
+
+      final uploadResponse = await http
+          .put(
+            Uri.parse(uploadUrl),
+            headers: {
+              'Content-Type': mimeType,
+            },
+            body: bytes,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (uploadResponse.statusCode == 200) {
+        return finalResourceUrl;
       }
       return null;
     } catch (_) {

@@ -153,6 +153,24 @@ class TestLambdaHandlers(unittest.TestCase):
         body = json.loads(response["body"])
         self.assertIn("upload_url", body)
         self.assertIn("s3_key", body)
+        self.assertTrue(body["s3_key"].startswith("reports/rep_123/danos/"))
+        self.assertEqual(body["category"], "danos")
+
+        # Formato válido con categoría identificacion y photo_id personalizado
+        id_event = {
+            "requestContext": {"http": {"method": "POST"}},
+            "body": json.dumps({
+                "report_id": "rep_123",
+                "category": "identificacion",
+                "photo_id": "cedula_001",
+                "file_name": "cedula.png"
+            }),
+        }
+        id_response = lambda_handler(id_event, None)
+        self.assertEqual(id_response["statusCode"], 200)
+        id_body = json.loads(id_response["body"])
+        self.assertEqual(id_body["s3_key"], "reports/rep_123/identificacion/cedula_001.png")
+        self.assertEqual(id_body["category"], "identificacion")
 
         # Formato no permitido
         bad_event = {

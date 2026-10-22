@@ -104,7 +104,42 @@ class OfflineQueueService {
     for (final itemStr in currentQueue) {
       try {
         final map = jsonDecode(itemStr) as Map<String, dynamic>;
-        final report = DisasterReport.fromJson(map);
+        var report = DisasterReport.fromJson(map);
+
+        // 1. Subir fotos pendientes a S3 si aún no tienen urlRemota
+        final evidenciasActualizadas = <FotoEvidencia>[];
+
+        for (final ev in report.evidencias) {
+          if ((ev.urlRemota == null || ev.urlRemota!.isEmpty) && ev.rutaLocal.isNotEmpty) {
+            final category = ev.tipo == TipoFotoEvidencia.identificacion.value
+                ? 'identificacion'
+                : 'danos';
+            final remoteUrl = await ApiService.uploadPhotoToS3(
+              reportId: report.reportId,
+              localPath: ev.rutaLocal,
+              category: category,
+              photoId: ev.id,
+            );
+
+            if (remoteUrl != null) {
+              evidenciasActualizadas.add(ev.copyWith(urlRemota: remoteUrl));
+            } else {
+              evidenciasActualizadas.add(ev);
+            }
+          } else {
+            evidenciasActualizadas.add(ev);
+          }
+        }
+
+        // Actualizar fotosUrls con las URLs remotas disponibles
+        final fotosUrls = evidenciasActualizadas
+            .map((e) => (e.urlRemota != null && e.urlRemota!.isNotEmpty) ? e.urlRemota! : e.rutaLocal)
+            .toList();
+
+        report = report.copyWith(
+          evidencias: evidenciasActualizadas,
+          fotosUrls: fotosUrls,
+        );
 
         final success = await ApiService.submitReport(report);
         if (success) {
@@ -112,7 +147,8 @@ class OfflineQueueService {
           // Actualizar estado en el caché histórico local
           await saveLocalReport(report, isSynced: true);
         } else {
-          remainingQueue.add(itemStr);
+          remainingQueue.add(jsonEncode(report.toJson()));
+          await saveLocalReport(report, isSynced: false);
         }
       } catch (_) {
         remainingQueue.add(itemStr);
