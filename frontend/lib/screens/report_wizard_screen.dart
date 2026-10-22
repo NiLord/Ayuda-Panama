@@ -396,7 +396,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
     setState(() {
       _enviando = true;
       _progresoEnvio = 0.05;
-      _mensajeEnvio = 'Comprimiendo y preparando evidencias...';
+      _mensajeEnvio = 'Optimizando imágenes...';
     });
 
     try {
@@ -556,7 +556,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
         ),
         content: Text(
           exito
-              ? 'Tu reporte fue recibido en AWS y está disponible para SINAPROC y los cuerpos de rescate.'
+              ? 'Tu reporte fue recibido exitosamente y está disponible para SINAPROC y los equipos de rescate.'
               : 'Sin conexión estable. Tu reporte quedó guardado localmente de forma segura y se enviará automáticamente en cuanto recuperes señal.',
         ),
         actions: [
@@ -640,7 +640,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
               ),
               const SizedBox(height: 20),
               const Text(
-                'Transmitiendo a AWS',
+                'Enviando Reporte',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               const SizedBox(height: 8),

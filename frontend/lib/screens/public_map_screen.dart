@@ -341,7 +341,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
       String mensaje;
       Color color;
       if (count > 0) {
-        mensaje = 'Se sincronizaron $count reporte(s) con AWS exitosamente.';
+        mensaje = 'Se sincronizaron $count reporte(s) exitosamente.';
         color = Colors.green;
       } else if (pendientesAntes == 0) {
         mensaje = 'No hay reportes pendientes por sincronizar.';

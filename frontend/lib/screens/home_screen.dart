@@ -43,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
       String mensaje;
       Color color;
       if (count > 0) {
-        mensaje = 'Se sincronizaron $count reporte(s) exitosamente con AWS.';
+        mensaje = 'Se sincronizaron $count reporte(s) exitosamente.';
         color = Colors.green;
       } else if (pendientesAntes == 0) {
         mensaje = 'No hay reportes pendientes por sincronizar.';

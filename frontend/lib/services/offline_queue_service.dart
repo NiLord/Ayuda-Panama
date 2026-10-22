@@ -98,9 +98,9 @@ class OfflineQueueService {
     void Function(double progress, String message)? onProgress,
   }) async {
     try {
-      onProgress?.call(0.05, 'Iniciando procesamiento de reporte...');
+      onProgress?.call(0.05, 'Preparando envío del reporte...');
 
-      // 1. Identificar evidencias que requieren subida a S3
+      // 1. Identificar evidencias que requieren subida
       final pendientesSubir = report.evidencias
           .where((e) => (e.urlRemota == null || e.urlRemota!.isEmpty) && e.rutaLocal.isNotEmpty)
           .toList();
@@ -117,7 +117,7 @@ class OfflineQueueService {
 
           onProgress?.call(
             0.1 + (0.75 * fotosSubidas / (totalFotos > 0 ? totalFotos : 1)),
-            'Subiendo foto ${fotosSubidas + 1} de $totalFotos a S3...',
+            'Subiendo imagen ${fotosSubidas + 1} de $totalFotos...',
           );
 
           final remoteUrl = await ApiService.uploadPhotoToS3(
@@ -138,11 +138,11 @@ class OfflineQueueService {
         }
       }
 
-      onProgress?.call(0.85, 'Evidencias fotográficas procesadas.');
+      onProgress?.call(0.85, 'Imágenes procesadas exitosamente.');
 
       // 2. Armar lista final de URLs remotas disponibles
       final fotosUrls = evidenciasActualizadas
-          .map((e) => (e.urlRemota != null && e.urlRemota!.isNotEmpty) ? e.urlRemota! : e.rutaLocal)
+          .map((e) => (e.urlRemota != null && e.urlRemota!.isEmpty) ? e.urlRemota! : e.rutaLocal)
           .toList();
 
       final reportFinal = report.copyWith(
@@ -150,15 +150,15 @@ class OfflineQueueService {
         fotosUrls: fotosUrls,
       );
 
-      // Guardar incrementalmente localmente para no perder las URLs de S3 ya obtenidas
+      // Guardar incrementalmente localmente para no perder las URLs ya obtenidas
       await saveLocalReport(reportFinal, isSynced: false);
 
-      // 3. Registrar el reporte en AWS API Gateway
-      onProgress?.call(0.90, 'Registrando evaluación en AWS DynamoDB...');
+      // 3. Registrar el reporte en el sistema central
+      onProgress?.call(0.90, 'Registrando reporte de emergencia...');
       final success = await ApiService.submitReport(reportFinal);
 
       if (success) {
-        onProgress?.call(1.0, '¡Reporte registrado exitosamente!');
+        onProgress?.call(1.0, '¡Reporte enviado exitosamente!');
         await saveLocalReport(reportFinal, isSynced: true);
         return true;
       } else {
