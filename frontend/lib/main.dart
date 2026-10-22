@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'config/app_config.dart';
+import 'l10n/app_messages.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_profile_screen.dart';
 import 'services/panama_dpa_service.dart';
@@ -9,6 +10,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppConfig.init();
   await PanamaDpaService.init();
+  await AppMessages.load('es');
   final isConfigured = await ReporterProfileService.isProfileConfigured();
 
   runApp(AyudaLosSantosApp(initialScreen: isConfigured ? const HomeScreen() : const OnboardingProfileScreen()));

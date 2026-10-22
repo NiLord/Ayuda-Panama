@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
+import '../l10n/app_messages.dart';
 import '../models/disaster_report.dart';
 import '../services/api_service.dart';
 import '../services/offline_queue_service.dart';
@@ -76,17 +77,18 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
   ReporterProfile? _myProfile;
 
   String get _textoUltimaActualizacion {
-    if (_ultimoRefresco == null) return 'Sin datos sincronizados';
+    final msg = AppMessages.current;
+    if (_ultimoRefresco == null) return msg.noSyncedData;
     final ahora = DateTime.now();
     final diff = ahora.difference(_ultimoRefresco!);
     if (diff.inSeconds < 60) {
-      return 'Actualizado hace ${diff.inSeconds} seg';
+      return msg.updatedSecondsAgo(diff.inSeconds);
     } else if (diff.inMinutes < 60) {
-      return 'Actualizado hace ${diff.inMinutes} min';
+      return msg.updatedMinutesAgo(diff.inMinutes);
     } else {
       final hora = _ultimoRefresco!.hour.toString().padLeft(2, '0');
       final min = _ultimoRefresco!.minute.toString().padLeft(2, '0');
-      return 'Actualizado a las $hora:$min';
+      return msg.updatedAtTime('$hora:$min');
     }
   }
 
@@ -130,9 +132,10 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
       if (diffSegundos < segundosMinimos) {
         final restan = segundosMinimos - diffSegundos;
         if (mounted) {
+          final msg = AppMessages.current;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Información reciente de hace $diffSegundos seg. Podrás refrescar en $restan seg.'),
+              content: Text(msg.recentDataWaitNotice(diffSegundos, restan)),
               duration: const Duration(seconds: 2),
               behavior: SnackBarBehavior.floating,
             ),
@@ -338,16 +341,17 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
     setState(() => _sincronizando = true);
     final count = await OfflineQueueService.flushQueue();
     if (mounted) {
+      final msg = AppMessages.current;
       String mensaje;
       Color color;
       if (count > 0) {
-        mensaje = 'Se sincronizaron $count reporte(s) exitosamente.';
+        mensaje = msg.syncedReportsSuccess(count);
         color = Colors.green;
       } else if (pendientesAntes == 0) {
-        mensaje = 'No hay reportes pendientes por sincronizar.';
+        mensaje = msg.noPendingReportsToSync;
         color = Colors.blue;
       } else {
-        mensaje = 'Sin conexión para sincronizar los reportes pendientes.';
+        mensaje = msg.syncNoConnection;
         color = Colors.orange;
       }
 
@@ -659,7 +663,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                                           const SizedBox(width: 6),
                                           Expanded(
                                             child: Text(
-                                              'Titular: ${item.nombreMascarado.isNotEmpty ? item.nombreMascarado : 'Afectado'} • Cédula: ${item.cedulaMascarada.isNotEmpty ? item.cedulaMascarada : 'Registrada'}',
+                                              AppMessages.current.titularInfo(item.nombreMascarado.isNotEmpty ? item.nombreMascarado : 'Afectado', item.cedulaMascarada.isNotEmpty ? item.cedulaMascarada : 'Registrada'),
                                               style: TextStyle(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w600,
@@ -678,16 +682,16 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                                   Row(
                                     children: [
                                       Text(
-                                        'Daño: ${item.habitabilidad}',
+                                        AppMessages.current.damageHabitability(item.habitabilidad),
                                         style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
                                       ),
                                       if (item.riesgoColapso) ...[
                                         const SizedBox(width: 8),
-                                        const Text('⚠️ Colapso', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                                        Text(AppMessages.current.hazardCollapse, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
                                       ],
                                       if (item.requiereAlbergue) ...[
                                         const SizedBox(width: 8),
-                                        const Text('⛺ Albergue', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12)),
+                                        Text(AppMessages.current.hazardShelter, style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12)),
                                       ],
                                     ],
                                   ),
@@ -700,8 +704,8 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          const Text(
-                                            'Trazabilidad / Redes:',
+                                          Text(
+                                            AppMessages.current.traceabilityNetworksTitle,
                                             style: TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
@@ -723,7 +727,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                                                 _cargarReportes();
                                               },
                                               icon: const Icon(Icons.edit, size: 14),
-                                              label: const Text('Editar', style: TextStyle(fontSize: 11)),
+                                              label: Text(AppMessages.current.edit, style: const TextStyle(fontSize: 11)),
                                             ),
                                         ],
                                       ),
@@ -733,26 +737,26 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                                         runSpacing: 6,
                                         children: [
                                           _buildSystemBadge(
-                                            label: item.isSynced ? 'Reporte App' : 'Reporte App (Local)',
+                                            label: item.isSynced ? AppMessages.current.badgeReportApp : AppMessages.current.badgeReportAppLocal,
                                             icon: item.isSynced ? Icons.cloud_done : Icons.phone_android,
                                             active: true,
                                             color: item.isSynced ? Colors.teal : Colors.amber.shade800,
                                           ),
                                           _buildSystemBadge(
-                                            label: 'SINAPROC',
+                                            label: AppMessages.current.badgeSinaproc,
                                             icon: Icons.shield,
                                             active: item.sistemasVinculados.contains('SINAPROC'),
                                             color: Colors.orange.shade800,
                                           ),
                                           _buildSystemBadge(
-                                            label: 'MIVIOT',
+                                            label: AppMessages.current.badgeMiviot,
                                             icon: Icons.domain,
                                             active: item.sistemasVinculados.contains('MIVIOT'),
                                             color: Colors.indigo.shade700,
                                           ),
                                           if (item.isMyReport)
                                             _buildSystemBadge(
-                                              label: 'Mío',
+                                              label: AppMessages.current.badgeMine,
                                               icon: Icons.person,
                                               active: true,
                                               color: Colors.blue.shade700,

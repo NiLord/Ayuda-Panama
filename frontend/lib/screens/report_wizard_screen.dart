@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../config/app_config.dart';
+import '../l10n/app_messages.dart';
 import '../models/disaster_report.dart';
 import '../services/offline_queue_service.dart';
 import '../services/panama_dpa_service.dart';
@@ -396,7 +397,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
     setState(() {
       _enviando = true;
       _progresoEnvio = 0.05;
-      _mensajeEnvio = 'Optimizando imágenes...';
+      _mensajeEnvio = AppMessages.current.optimizingImages;
     });
 
     try {
@@ -540,6 +541,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
 
   void _mostrarDialogoResultado(bool exito) {
     if (!mounted) return;
+    final msg = AppMessages.current;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -551,13 +553,11 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
               color: exito ? Colors.green : Colors.orange,
             ),
             const SizedBox(width: 8),
-            Text(exito ? 'Reporte Enviado' : 'Guardado Offline'),
+            Text(exito ? msg.reportSentDialogTitle : msg.reportSavedOfflineDialogTitle),
           ],
         ),
         content: Text(
-          exito
-              ? 'Tu reporte fue recibido exitosamente y está disponible para SINAPROC y los equipos de rescate.'
-              : 'Sin conexión estable. Tu reporte quedó guardado localmente de forma segura y se enviará automáticamente en cuanto recuperes señal.',
+          exito ? msg.reportSentSuccessBody : msg.reportSavedOfflineBody,
         ),
         actions: [
           TextButton(
@@ -565,7 +565,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
               Navigator.of(context).pop();
               Navigator.of(context).pop(); // Volver al home
             },
-            child: const Text('Entendido'),
+            child: Text(msg.understood),
           ),
         ],
       ),
@@ -574,6 +574,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
 
   void _mostrarAvisoSegundoPlano() {
     if (!mounted) return;
+    final msg = AppMessages.current;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -582,19 +583,17 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
           children: [
             Icon(Icons.hourglass_top, color: Colors.orange.shade700),
             const SizedBox(width: 8),
-            const Text('Subida en Segundo Plano'),
+            Text(msg.backgroundUploadDialogTitle),
           ],
         ),
-        content: Text(
-          'La conexión celular está lenta. Tu reporte y fotos se seguirán subiendo en segundo plano durante 1 minuto más. Si la conexión falla, el registro quedará seguro en tu cola pendiente.',
-        ),
+        content: Text(msg.backgroundUploadBody),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
               Navigator.of(context).pop(); // Volver al home
             },
-            child: const Text('Entendido'),
+            child: Text(msg.understood),
           ),
         ],
       ),
@@ -602,6 +601,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   }
 
   Widget _buildFullScreenLoadingOverlay() {
+    final msg = AppMessages.current;
     return Container(
       color: Colors.black.withValues(alpha: 0.78),
       alignment: Alignment.center,
@@ -639,9 +639,9 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 ],
               ),
               const SizedBox(height: 20),
-              const Text(
-                'Enviando Reporte',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              Text(
+                msg.sendingReportTitle,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               const SizedBox(height: 8),
               Text(
@@ -661,7 +661,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
               ),
               const SizedBox(height: 14),
               Text(
-                'Por favor no cierres la app. Si la conexión tarda más de ${AppConfig.uploadTimeoutSeconds}s, el proceso continuará en segundo plano automáticamente.',
+                msg.uploadOverlayNotice(AppConfig.uploadTimeoutSeconds),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
               ),

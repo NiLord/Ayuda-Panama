@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../l10n/app_messages.dart';
 import '../models/disaster_report.dart';
 import 'api_service.dart';
 
@@ -98,7 +99,8 @@ class OfflineQueueService {
     void Function(double progress, String message)? onProgress,
   }) async {
     try {
-      onProgress?.call(0.05, 'Preparando envío del reporte...');
+      final msg = AppMessages.current;
+      onProgress?.call(0.05, msg.preparingReport);
 
       // 1. Identificar evidencias que requieren subida
       final pendientesSubir = report.evidencias
@@ -117,7 +119,7 @@ class OfflineQueueService {
 
           onProgress?.call(
             0.1 + (0.75 * fotosSubidas / (totalFotos > 0 ? totalFotos : 1)),
-            'Subiendo imagen ${fotosSubidas + 1} de $totalFotos...',
+            msg.uploadingImage(fotosSubidas + 1, totalFotos),
           );
 
           final remoteUrl = await ApiService.uploadPhotoToS3(
@@ -138,7 +140,7 @@ class OfflineQueueService {
         }
       }
 
-      onProgress?.call(0.85, 'Imágenes procesadas exitosamente.');
+      onProgress?.call(0.85, msg.imagesProcessedSuccess);
 
       // 2. Armar lista final de URLs remotas disponibles
       final fotosUrls = evidenciasActualizadas
@@ -154,11 +156,11 @@ class OfflineQueueService {
       await saveLocalReport(reportFinal, isSynced: false);
 
       // 3. Registrar el reporte en el sistema central
-      onProgress?.call(0.90, 'Registrando reporte de emergencia...');
+      onProgress?.call(0.90, msg.registeringEmergencyReport);
       final success = await ApiService.submitReport(reportFinal);
 
       if (success) {
-        onProgress?.call(1.0, '¡Reporte enviado exitosamente!');
+        onProgress?.call(1.0, msg.reportSentSuccess);
         await saveLocalReport(reportFinal, isSynced: true);
         return true;
       } else {

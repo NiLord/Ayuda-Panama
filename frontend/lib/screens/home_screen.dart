@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_messages.dart';
 import '../services/offline_queue_service.dart';
 import '../services/reporter_profile_service.dart';
 import 'onboarding_profile_screen.dart';
@@ -40,16 +41,17 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _sincronizando = false);
 
     if (mounted) {
+      final msg = AppMessages.current;
       String mensaje;
       Color color;
       if (count > 0) {
-        mensaje = 'Se sincronizaron $count reporte(s) exitosamente.';
+        mensaje = msg.syncedReportsSuccess(count);
         color = Colors.green;
       } else if (pendientesAntes == 0) {
-        mensaje = 'No hay reportes pendientes por sincronizar.';
+        mensaje = msg.noPendingReportsToSync;
         color = Colors.blue;
       } else {
-        mensaje = 'No fue posible sincronizar los reportes pendientes. Verifica tu conexión.';
+        mensaje = msg.syncFailedCheckConnection;
         color = Colors.orange;
       }
 
