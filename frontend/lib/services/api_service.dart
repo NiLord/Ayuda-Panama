@@ -43,13 +43,16 @@ class ApiService {
     }
   }
 
-  /// Consulta los reportes públicos verificados desde AWS
-  static Future<Map<String, dynamic>?> fetchPublicReports() async {
+  /// Consulta los reportes públicos verificados desde AWS (soporta delta con since)
+  static Future<Map<String, dynamic>?> fetchPublicReports({String? since}) async {
     try {
-      final url = Uri.parse('$baseUrl/api/v1/reports/public');
+      final queryParam = (since != null && since.isNotEmpty)
+          ? '?since=${Uri.encodeComponent(since)}'
+          : '';
+      final url = Uri.parse('$baseUrl/api/v1/reports/public$queryParam');
       final response = await http
           .get(url, headers: _authHeaders)
-          .timeout(const Duration(seconds: 6));
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;

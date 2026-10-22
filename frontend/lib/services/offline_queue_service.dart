@@ -91,6 +91,86 @@ class OfflineQueueService {
     return list.length;
   }
 
+  /// Sube las evidencias pendientes a S3 y persiste el reporte en AWS API Gateway / DynamoDB.
+  /// Si se proporciona [onProgress], emite el valor (0.0 a 1.0) y el mensaje de estado.
+  static Future<bool> uploadReportWithEvidences(
+    DisasterReport report, {
+    void Function(double progress, String message)? onProgress,
+  }) async {
+    try {
+      onProgress?.call(0.05, 'Iniciando procesamiento de reporte...');
+
+      // 1. Identificar evidencias que requieren subida a S3
+      final pendientesSubir = report.evidencias
+          .where((e) => (e.urlRemota == null || e.urlRemota!.isEmpty) && e.rutaLocal.isNotEmpty)
+          .toList();
+
+      final totalFotos = pendientesSubir.length;
+      final evidenciasActualizadas = <FotoEvidencia>[];
+      int fotosSubidas = 0;
+
+      for (final ev in report.evidencias) {
+        if ((ev.urlRemota == null || ev.urlRemota!.isEmpty) && ev.rutaLocal.isNotEmpty) {
+          final category = ev.tipo == TipoFotoEvidencia.identificacion.value
+              ? 'identificacion'
+              : 'danos';
+
+          onProgress?.call(
+            0.1 + (0.75 * fotosSubidas / (totalFotos > 0 ? totalFotos : 1)),
+            'Subiendo foto ${fotosSubidas + 1} de $totalFotos a S3...',
+          );
+
+          final remoteUrl = await ApiService.uploadPhotoToS3(
+            reportId: report.reportId,
+            localPath: ev.rutaLocal,
+            category: category,
+            photoId: ev.id,
+          );
+
+          if (remoteUrl != null) {
+            evidenciasActualizadas.add(ev.copyWith(urlRemota: remoteUrl));
+          } else {
+            evidenciasActualizadas.add(ev);
+          }
+          fotosSubidas++;
+        } else {
+          evidenciasActualizadas.add(ev);
+        }
+      }
+
+      onProgress?.call(0.85, 'Evidencias fotográficas procesadas.');
+
+      // 2. Armar lista final de URLs remotas disponibles
+      final fotosUrls = evidenciasActualizadas
+          .map((e) => (e.urlRemota != null && e.urlRemota!.isNotEmpty) ? e.urlRemota! : e.rutaLocal)
+          .toList();
+
+      final reportFinal = report.copyWith(
+        evidencias: evidenciasActualizadas,
+        fotosUrls: fotosUrls,
+      );
+
+      // Guardar incrementalmente localmente para no perder las URLs de S3 ya obtenidas
+      await saveLocalReport(reportFinal, isSynced: false);
+
+      // 3. Registrar el reporte en AWS API Gateway
+      onProgress?.call(0.90, 'Registrando evaluación en AWS DynamoDB...');
+      final success = await ApiService.submitReport(reportFinal);
+
+      if (success) {
+        onProgress?.call(1.0, '¡Reporte registrado exitosamente!');
+        await saveLocalReport(reportFinal, isSynced: true);
+        return true;
+      } else {
+        await saveLocalReport(reportFinal, isSynced: false);
+        return false;
+      }
+    } catch (_) {
+      await saveLocalReport(report, isSynced: false);
+      return false;
+    }
+  }
+
   /// Intenta sincronizar todos los reportes pendientes con el backend en AWS
   static Future<int> flushQueue() async {
     final prefs = await SharedPreferences.getInstance();
@@ -104,51 +184,13 @@ class OfflineQueueService {
     for (final itemStr in currentQueue) {
       try {
         final map = jsonDecode(itemStr) as Map<String, dynamic>;
-        var report = DisasterReport.fromJson(map);
+        final report = DisasterReport.fromJson(map);
 
-        // 1. Subir fotos pendientes a S3 si aún no tienen urlRemota
-        final evidenciasActualizadas = <FotoEvidencia>[];
-
-        for (final ev in report.evidencias) {
-          if ((ev.urlRemota == null || ev.urlRemota!.isEmpty) && ev.rutaLocal.isNotEmpty) {
-            final category = ev.tipo == TipoFotoEvidencia.identificacion.value
-                ? 'identificacion'
-                : 'danos';
-            final remoteUrl = await ApiService.uploadPhotoToS3(
-              reportId: report.reportId,
-              localPath: ev.rutaLocal,
-              category: category,
-              photoId: ev.id,
-            );
-
-            if (remoteUrl != null) {
-              evidenciasActualizadas.add(ev.copyWith(urlRemota: remoteUrl));
-            } else {
-              evidenciasActualizadas.add(ev);
-            }
-          } else {
-            evidenciasActualizadas.add(ev);
-          }
-        }
-
-        // Actualizar fotosUrls con las URLs remotas disponibles
-        final fotosUrls = evidenciasActualizadas
-            .map((e) => (e.urlRemota != null && e.urlRemota!.isNotEmpty) ? e.urlRemota! : e.rutaLocal)
-            .toList();
-
-        report = report.copyWith(
-          evidencias: evidenciasActualizadas,
-          fotosUrls: fotosUrls,
-        );
-
-        final success = await ApiService.submitReport(report);
+        final success = await uploadReportWithEvidences(report);
         if (success) {
           syncedCount++;
-          // Actualizar estado en el caché histórico local
-          await saveLocalReport(report, isSynced: true);
         } else {
-          remainingQueue.add(jsonEncode(report.toJson()));
-          await saveLocalReport(report, isSynced: false);
+          remainingQueue.add(itemStr);
         }
       } catch (_) {
         remainingQueue.add(itemStr);

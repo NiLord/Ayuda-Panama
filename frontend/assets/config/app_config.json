@@ -35,6 +35,9 @@
   },
   "rules": {
     "requireIdPhoto": true,
-    "minDamagePhotos": 2
+    "minDamagePhotos": 2,
+    "uploadTimeoutSeconds": 15,
+    "backgroundUploadMaxDurationSeconds": 60,
+    "publicMonitoringCacheMinutes": 1
   }
 }

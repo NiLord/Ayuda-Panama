@@ -35,6 +35,7 @@ class PublicMapAdapter:
             },
             "properties": {
                 "id": assessment.report_id,
+                "report_id": assessment.report_id,
                 "timestamp": assessment.timestamp,
                 "prioridad": assessment.prioridad.value,
                 "semaforo_color": color,
@@ -47,6 +48,8 @@ class PublicMapAdapter:
                 "comunidad_sector": assessment.ubicacion.comunidad_sector,
                 "accesibilidad_vial": assessment.ubicacion.accesibilidad_vial,
                 "total_ocupantes": assessment.censo_demografico.total_ocupantes,
+                "reporter_id": assessment.informante.reporter_id,
+                "fotos_urls": assessment.fotos_urls,
                 "servicios_afectados": {
                     "agua_potable": assessment.servicios_vitales.agua_potable,
                     "electricidad": assessment.servicios_vitales.electricidad,

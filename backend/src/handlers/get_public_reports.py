@@ -50,8 +50,19 @@ def lambda_handler(event: dict, context) -> dict:
         return build_response(200, {"message": "OK"})
 
     try:
-        # Escaneo paginado de reportes recientes (en producción acotado por GSI de provincia)
-        response = reports_table.scan(Limit=500)
+        query_params = event.get("queryStringParameters") or {}
+        since_filter = query_params.get("since")
+
+        # Escaneo paginado de reportes recientes (soporta carga de delta con ?since=)
+        if since_filter:
+            from boto3.dynamodb.conditions import Attr
+            response = reports_table.scan(
+                FilterExpression=Attr("timestamp").gt(since_filter),
+                Limit=500,
+            )
+        else:
+            response = reports_table.scan(Limit=500)
+
         items = response.get("Items", [])
 
         assessments = []
@@ -62,13 +73,24 @@ def lambda_handler(event: dict, context) -> dict:
                 est_data = item.get("evaluacion_estructural", {})
                 ser_data = item.get("servicios_vitales", {})
                 nec_data = item.get("necesidades_humanitarias", {})
+                inf_data = item.get("informante", {})
+
+                # Filtrar solo fotos de daños (no identificación/cédula PII)
+                raw_fotos = item.get("fotos_urls", [])
+                public_fotos = [
+                    f for f in raw_fotos
+                    if isinstance(f, str) and "identificacion" not in f.lower()
+                ]
 
                 assessment = DisasterAssessment(
                     report_id=item.get("report_id", ""),
                     timestamp=item.get("timestamp", ""),
                     prioridad=PrioridadTriage(item.get("prioridad", PrioridadTriage.P3_MONITOREO_ENSERES.value)),
                     consentimiento_informado=item.get("consentimiento_informado", True),
-                    informante=Informante(reporter_id="", rol=RolInformante.AFECTADO_DIRECTO),
+                    informante=Informante(
+                        reporter_id=inf_data.get("reporter_id", ""),
+                        rol=RolInformante(inf_data.get("rol", RolInformante.AFECTADO_DIRECTO.value)),
+                    ),
                     titular_afectado=TitularAfectado(),
                     ubicacion=Ubicacion(
                         coordenadas=Coordenadas(
@@ -102,6 +124,7 @@ def lambda_handler(event: dict, context) -> dict:
                         requiere_rescate_medico=nec_data.get("requiere_rescate_medico", False),
                     ),
                     auditoria_kyc=AuditoriaDeviceKYC(installation_id=""),
+                    fotos_urls=public_fotos,
                 )
                 assessments.append(assessment)
             except Exception as parse_err:

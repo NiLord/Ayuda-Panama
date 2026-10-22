@@ -11,11 +11,18 @@ import sys
 
 # Mock boto3 and botocore before handler imports for zero-dependency local testing
 mock_boto3 = MagicMock()
+mock_boto3_dynamodb = MagicMock()
+mock_boto3_conditions = MagicMock()
+mock_boto3_dynamodb.conditions = mock_boto3_conditions
 mock_botocore = MagicMock()
 mock_botocore_config = MagicMock()
 mock_botocore.config = mock_botocore_config
 if "boto3" not in sys.modules:
     sys.modules["boto3"] = mock_boto3
+if "boto3.dynamodb" not in sys.modules:
+    sys.modules["boto3.dynamodb"] = mock_boto3_dynamodb
+if "boto3.dynamodb.conditions" not in sys.modules:
+    sys.modules["boto3.dynamodb.conditions"] = mock_boto3_conditions
 if "botocore" not in sys.modules:
     sys.modules["botocore"] = mock_botocore
 if "botocore.config" not in sys.modules:
@@ -127,6 +134,7 @@ class TestLambdaHandlers(unittest.TestCase):
 
         feature = geojson["features"][0]
         self.assertEqual(feature["properties"]["id"], "rep_999")
+        self.assertEqual(feature["properties"]["report_id"], "rep_999")
         self.assertEqual(feature["properties"]["habitabilidad"], "INHABITABLE")
         self.assertEqual(feature["properties"]["semaforo_color"], "#E74C3C")
 
@@ -136,6 +144,15 @@ class TestLambdaHandlers(unittest.TestCase):
         self.assertNotIn("TELEFONO_PRIVADO_1234", raw_body)
         self.assertNotIn("JEFE_HOGAR_SECRETO", raw_body)
         self.assertNotIn("CEDULA_SECRETA_777", raw_body)
+
+        # Prueba con delta query parameter since
+        delta_event = {
+            "requestContext": {"http": {"method": "GET"}},
+            "queryStringParameters": {"since": "2026-10-21T00:00:00Z"},
+        }
+        delta_response = lambda_handler(delta_event, None)
+        self.assertEqual(delta_response["statusCode"], 200)
+        self.assertTrue(mock_reports_table.scan.called)
 
     @patch("backend.src.handlers.get_presigned_url.s3_client")
     def test_get_presigned_url_handler(self, mock_s3_client):

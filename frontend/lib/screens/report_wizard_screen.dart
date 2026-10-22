@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../config/app_config.dart';
 import '../models/disaster_report.dart';
-import '../services/api_service.dart';
 import '../services/offline_queue_service.dart';
 import '../services/panama_dpa_service.dart';
 import '../services/postal_code_service.dart';
@@ -23,6 +23,8 @@ class ReportWizardScreen extends StatefulWidget {
 class _ReportWizardScreenState extends State<ReportWizardScreen> {
   int _currentStep = 0;
   bool _enviando = false;
+  double _progresoEnvio = 0.0;
+  String _mensajeEnvio = 'Iniciando reporte...';
 
   // Evento activo dinámico resuelto desde AppConfig (vector de eventos en AWS SSM)
   String get _tipoEvento => AppConfig.defaultEvent.tipo;
@@ -391,7 +393,11 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
       return;
     }
 
-    setState(() => _enviando = true);
+    setState(() {
+      _enviando = true;
+      _progresoEnvio = 0.05;
+      _mensajeEnvio = 'Comprimiendo y preparando evidencias...';
+    });
 
     try {
       final profile = await ReporterProfileService.getOrCreateProfile();
@@ -416,36 +422,9 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
 
       final reportId = widget.initialReport?.reportId ?? 'rep_${const Uuid().v4()}';
 
-      // Consolidar evidencias fotográficas estructuradas y subir fotos a S3
-      final evidenciasActualizadas = <FotoEvidencia>[];
-      final fotosUrls = <String>[];
-
       final evidenciasLocales = <FotoEvidencia>[];
       if (_fotoIdentificacion != null) evidenciasLocales.add(_fotoIdentificacion!);
       evidenciasLocales.addAll(_fotosEstructura);
-
-      for (final ev in evidenciasLocales) {
-        String? remoteUrl = ev.urlRemota;
-        if ((remoteUrl == null || remoteUrl.isEmpty) && ev.rutaLocal.isNotEmpty) {
-          final category = ev.tipo == TipoFotoEvidencia.identificacion.value
-              ? 'identificacion'
-              : 'danos';
-          remoteUrl = await ApiService.uploadPhotoToS3(
-            reportId: reportId,
-            localPath: ev.rutaLocal,
-            category: category,
-            photoId: ev.id,
-          );
-        }
-
-        final evActualizada = ev.copyWith(urlRemota: remoteUrl);
-        evidenciasActualizadas.add(evActualizada);
-        if (remoteUrl != null && remoteUrl.isNotEmpty) {
-          fotosUrls.add(remoteUrl);
-        } else if (ev.rutaLocal.isNotEmpty) {
-          fotosUrls.add(ev.rutaLocal);
-        }
-      }
 
       final report = DisasterReport(
         reportId: reportId,
@@ -460,8 +439,8 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
           'fuga_gas': _fugaGas,
           'riesgo_colapso': _riesgoColapso,
         },
-        evidencias: evidenciasActualizadas,
-        fotosUrls: fotosUrls,
+        evidencias: evidenciasLocales,
+        fotosUrls: evidenciasLocales.map((e) => e.rutaLocal).toList(),
         reporterId: profile.reporterId,
         rolInformante: profile.rol,
         informanteNombre: profile.nombre,
@@ -515,58 +494,189 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
         tipoConexion: telemetry.tipoConexion,
       );
 
-      // Intentar enviar a AWS
-      final exito = await ApiService.submitReport(report);
+      // Guardar inmediatamente en registro local como respaldo offline
+      await OfflineQueueService.saveLocalReport(report, isSynced: false);
 
-      // Guardar o actualizar siempre en el registro local histórico (marcando si está sincronizado o pendiente)
-      await OfflineQueueService.saveLocalReport(report, isSynced: exito);
+      // Iniciar subida completa de evidencias a S3 y reporte a DynamoDB
+      final uploadFuture = OfflineQueueService.uploadReportWithEvidences(
+        report,
+        onProgress: (prog, msg) {
+          if (mounted) {
+            setState(() {
+              _progresoEnvio = prog;
+              _mensajeEnvio = msg;
+            });
+          }
+        },
+      );
 
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            title: Row(
-              children: [
-                Icon(
-                  exito ? Icons.check_circle : Icons.cloud_queue,
-                  color: exito ? Colors.green : Colors.orange,
-                ),
-                const SizedBox(width: 8),
-                Text(exito ? 'Reporte Enviado' : 'Guardado Offline'),
-              ],
-            ),
-            content: Text(
-              exito
-                  ? 'Tu reporte fue recibido en AWS y está disponible para SINAPROC y los cuerpos de rescate.'
-                  : 'Sin conexión estable. Tu reporte quedó guardado localmente de forma segura y se enviará automáticamente en cuanto recuperes señal.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pop(); // Volver al home
-                },
-                child: const Text('Entendido'),
-              ),
-            ],
-          ),
-        );
+      final timeoutSec = AppConfig.uploadTimeoutSeconds;
+      final maxBackgroundSec = AppConfig.backgroundUploadMaxDurationSeconds;
+
+      try {
+        final exito = await uploadFuture.timeout(Duration(seconds: timeoutSec));
+        if (mounted) {
+          setState(() => _enviando = false);
+          _mostrarDialogoResultado(exito);
+        }
+      } on TimeoutException {
+        // Si dura más del timeout parametrizado (ej. 15 segundos), liberar pantalla
+        if (mounted) {
+          setState(() => _enviando = false);
+          _mostrarAvisoSegundoPlano();
+        }
+        // Dejar que continúe en background hasta por 1 minuto más
+        uploadFuture.timeout(Duration(seconds: maxBackgroundSec)).catchError((_) => false);
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _enviando = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
-    } finally {
-      if (mounted) setState(() => _enviando = false);
     }
+  }
+
+  void _mostrarDialogoResultado(bool exito) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              exito ? Icons.check_circle : Icons.cloud_queue,
+              color: exito ? Colors.green : Colors.orange,
+            ),
+            const SizedBox(width: 8),
+            Text(exito ? 'Reporte Enviado' : 'Guardado Offline'),
+          ],
+        ),
+        content: Text(
+          exito
+              ? 'Tu reporte fue recibido en AWS y está disponible para SINAPROC y los cuerpos de rescate.'
+              : 'Sin conexión estable. Tu reporte quedó guardado localmente de forma segura y se enviará automáticamente en cuanto recuperes señal.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop(); // Volver al home
+            },
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _mostrarAvisoSegundoPlano() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.hourglass_top, color: Colors.orange.shade700),
+            const SizedBox(width: 8),
+            const Text('Subida en Segundo Plano'),
+          ],
+        ),
+        content: Text(
+          'La conexión celular está lenta. Tu reporte y fotos se seguirán subiendo en segundo plano durante 1 minuto más. Si la conexión falla, el registro quedará seguro en tu cola pendiente.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop(); // Volver al home
+            },
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFullScreenLoadingOverlay() {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.78),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Card(
+        color: Colors.white,
+        elevation: 12,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 84,
+                    height: 84,
+                    child: CircularProgressIndicator(
+                      value: _progresoEnvio > 0 ? _progresoEnvio : null,
+                      strokeWidth: 7,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation(Colors.red.shade700),
+                    ),
+                  ),
+                  Text(
+                    '${(_progresoEnvio * 100).toInt()}%',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: Colors.red.shade900,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Transmitiendo a AWS',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _mensajeEnvio,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+              const SizedBox(height: 16),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: _progresoEnvio > 0 ? _progresoEnvio : null,
+                  minHeight: 8,
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: AlwaysStoppedAnimation(Colors.red.shade700),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Por favor no cierres la app. Si la conexión tarda más de ${AppConfig.uploadTimeoutSeconds}s, el proceso continuará en segundo plano automáticamente.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       appBar: AppBar(
         title: Text(widget.initialReport != null ? 'Editar Reporte de Emergencia' : 'Nuevo Reporte de Emergencia'),
         backgroundColor: Colors.red.shade800,
@@ -1382,8 +1492,12 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+    if (_enviando)
+      _buildFullScreenLoadingOverlay(),
+  ],
+);
+}
 
   Widget _buildCounter(
     String title,

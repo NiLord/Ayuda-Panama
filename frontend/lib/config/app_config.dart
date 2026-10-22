@@ -65,6 +65,9 @@ class AppConfig {
   };
   static bool requireIdPhoto = true;
   static int minDamagePhotos = 2;
+  static int uploadTimeoutSeconds = 15;
+  static int backgroundUploadMaxDurationSeconds = 60;
+  static int publicMonitoringCacheMinutes = 1;
 
   static bool _initialized = false;
 
@@ -119,6 +122,9 @@ class AppConfig {
       if (rules != null) {
         requireIdPhoto = rules['requireIdPhoto'] ?? requireIdPhoto;
         minDamagePhotos = (rules['minDamagePhotos'] as num?)?.toInt() ?? minDamagePhotos;
+        uploadTimeoutSeconds = (rules['uploadTimeoutSeconds'] as num?)?.toInt() ?? uploadTimeoutSeconds;
+        backgroundUploadMaxDurationSeconds = (rules['backgroundUploadMaxDurationSeconds'] as num?)?.toInt() ?? backgroundUploadMaxDurationSeconds;
+        publicMonitoringCacheMinutes = (rules['publicMonitoringCacheMinutes'] as num?)?.toInt() ?? publicMonitoringCacheMinutes;
       }
     } catch (_) {
       // Si el asset no está disponible (ej. en ciertos tests unitarios), se mantienen los valores por defecto seguros
@@ -130,6 +136,12 @@ class AppConfig {
 
     const envEvent = String.fromEnvironment('DEFAULT_EVENT_CODE');
     if (envEvent.isNotEmpty) defaultEventCode = envEvent;
+
+    const envTimeout = String.fromEnvironment('UPLOAD_TIMEOUT_SECONDS');
+    if (envTimeout.isNotEmpty) {
+      final parsed = int.tryParse(envTimeout);
+      if (parsed != null) uploadTimeoutSeconds = parsed;
+    }
 
     _initialized = true;
   }
