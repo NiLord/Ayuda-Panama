@@ -7,13 +7,13 @@ class DuplicateCheckService {
   // Caché en memoria para no repetir consultas idénticas en la misma sesión
   static final Map<String, DuplicateCheckResult> _cache = {};
 
-  static Future<DuplicateCheckResult> verificarCedula(String cedula) async {
+  static Future<DuplicateCheckResult> verificarCedula(String cedula, {bool force = false}) async {
     final clean = cedula.trim().toUpperCase();
     if (clean.isEmpty) {
       return DuplicateCheckResult.empty();
     }
 
-    if (_cache.containsKey(clean)) {
+    if (!force && _cache.containsKey(clean)) {
       return _cache[clean]!;
     }
 

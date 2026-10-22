@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_messages.dart';
 import '../services/offline_queue_service.dart';
 import '../services/reporter_profile_service.dart';
+import 'citizen_query_screen.dart';
 import 'onboarding_profile_screen.dart';
 import 'public_map_screen.dart';
 import 'report_wizard_screen.dart';
@@ -158,7 +159,42 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // Botón Principal: CREAR REPORTE DE EMERGENCIA
+            // Botón Principal Verde (De Primero): CONSULTA ESTADO DE MI SOLICITUD
+            ElevatedButton(
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CitizenQueryScreen()),
+                );
+                _actualizarEstado();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B5E20), // Verde oficial
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 4,
+              ),
+              child: const Column(
+                children: [
+                  Icon(Icons.assignment_turned_in_rounded, size: 36),
+                  SizedBox(height: 8),
+                  Text(
+                    'CONSULTA ESTADO DE MI SOLICITUD',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Búsqueda unificada en SINAPROC y MIVIOT por cédula',
+                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Botón Secundario Rojo: CREAR REPORTE DE EMERGENCIA
             ElevatedButton(
               onPressed: () async {
                 final isConfigured = await ReporterProfileService.isProfileConfigured();

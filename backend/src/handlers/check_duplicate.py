@@ -13,7 +13,12 @@ import boto3
 from boto3.dynamodb.conditions import Key
 
 from ..utils.cedula_normalizer import normalize_cedula, mask_cedula
-from ..utils.geo_normalizer import homologar_evaluador
+from ..utils.geo_normalizer import (
+    homologar_provincia,
+    homologar_distrito,
+    format_clean_name,
+    homologar_evaluador,
+)
 from ..adapters.miviot_adapter import MiviotAdapter
 
 logger = logging.getLogger(__name__)
@@ -85,11 +90,16 @@ def lambda_handler(event: dict, context) -> dict:
                 existe_duplicado = True
                 sistemas_encontrados.append("APP")
                 for it in app_items:
+                    ubic = it.get("ubicacion") or {}
                     detalles_reportes.append({
                         "fuente": "APP",
-                        "report_id": it.get("report_id"),
-                        "fecha": it.get("timestamp"),
-                        "habitabilidad": it.get("evaluacion_estructural", {}).get("habitabilidad") or it.get("habitabilidad"),
+                        "report_id": str(it.get("report_id") or ""),
+                        "fecha": str(it.get("timestamp") or ""),
+                        "habitabilidad": str(it.get("evaluacion_estructural", {}).get("habitabilidad") or it.get("habitabilidad") or "HABITABLE"),
+                        "provincia": homologar_provincia(ubic.get("provincia")),
+                        "distrito": homologar_distrito(ubic.get("distrito")),
+                        "corregimiento": format_clean_name(ubic.get("corregimiento")),
+                        "comunidad_sector": format_clean_name(ubic.get("comunidad_sector")),
                         "estado": "Reporte ciudadano registrado en la aplicación",
                     })
         except Exception as e:
@@ -109,11 +119,23 @@ def lambda_handler(event: dict, context) -> dict:
                     sistemas_encontrados.append("SINAPROC")
                 for it in ext_items:
                     eval_name = homologar_evaluador(it.get("evaluador"))
+                    ubic = it.get("ubicacion") or {}
                     detalles_reportes.append({
                         "fuente": "SINAPROC",
-                        "external_id": it.get("external_id"),
-                        "fecha": it.get("timestamp"),
-                        "habitabilidad": it.get("habitabilidad"),
+                        "external_id": str(it.get("external_id") or ""),
+                        "fecha": str(it.get("timestamp") or ""),
+                        "habitabilidad": str(it.get("habitabilidad") or "DESCONOCIDO"),
+                        "evaluador": eval_name,
+                        "dano_descripcion": str(it.get("dano_descripcion") or "Evaluación oficial de campo"),
+                        "tipo_vivienda": format_clean_name(it.get("tipo_vivienda")) or "Casa",
+                        "tipo_construccion": format_clean_name(it.get("tipo_construccion")) or "Bloque",
+                        "total_afectados": int(it.get("total_afectados") or 1) if str(it.get("total_afectados") or "").isdigit() else 1,
+                        "titular": str(it.get("nombre_titular_censurado") or "Residente"),
+                        "provincia": homologar_provincia(ubic.get("provincia")),
+                        "distrito": homologar_distrito(ubic.get("distrito")),
+                        "corregimiento": format_clean_name(ubic.get("corregimiento")),
+                        "comunidad_sector": format_clean_name(ubic.get("comunidad_sector")),
+                        "calle_o_direccion": str(ubic.get("calle_o_direccion") or ""),
                         "estado": f"Evaluación oficial de campo realizada por {eval_name}",
                     })
         except Exception as e:
@@ -126,11 +148,13 @@ def lambda_handler(event: dict, context) -> dict:
             cached_item = resp_miviot.get("Item")
 
             if cached_item and cached_item.get("encontrado"):
+                paso_val = cached_item.get("paso_actual", 1)
                 tramite_miviot = {
                     "reporte": cached_item.get("reporte"),
                     "fecha_recibido": cached_item.get("fecha_recibido"),
-                    "paso_actual": cached_item.get("paso_actual"),
+                    "paso_actual": int(paso_val) if str(paso_val).isdigit() else 1,
                     "estado_actual": cached_item.get("estado_actual"),
+                    "encontrado": True,
                 }
                 if "MIVIOT" not in sistemas_encontrados:
                     sistemas_encontrados.append("MIVIOT")
@@ -144,6 +168,7 @@ def lambda_handler(event: dict, context) -> dict:
                         "fecha_recibido": res_miviot.fecha_recibido,
                         "paso_actual": res_miviot.paso_actual,
                         "estado_actual": res_miviot.estado_actual,
+                        "encontrado": True,
                     }
                     if "MIVIOT" not in sistemas_encontrados:
                         sistemas_encontrados.append("MIVIOT")
