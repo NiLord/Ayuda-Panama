@@ -116,7 +116,7 @@ class _OnboardingProfileScreenState extends State<OnboardingProfileScreen> {
               const SizedBox(height: 16),
               DropdownButtonFormField<RolInformante>(
                 isExpanded: true,
-                value: _rolSeleccionado,
+                initialValue: _rolSeleccionado,
                 decoration: const InputDecoration(
                   labelText: '¿Cuál es tu rol habitual?',
                   prefixIcon: Icon(Icons.badge),

@@ -1,0 +1,129 @@
+name: Infraestructura (AWS CloudFormation)
+
+on:
+  push:
+    tags:
+      - 'infra-v*'
+  pull_request:
+    paths:
+      - 'infra/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    name: Validar Plantilla CloudFormation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Validar Sintaxis de Plantillas
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('infra/cloudformation.yaml'))"
+          python3 -c "import yaml; yaml.safe_load(open('infra/github-oidc.yaml'))"
+
+  deploy:
+    name: Desplegar Infraestructura en AWS
+    needs: validate
+    if: startsWith(github.ref, 'refs/tags/infra-v')
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ENVIRONMENT: prod
+      STACK_NAME: lse-emergency-platform-prod
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Credenciales AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolver o Generar Secretos en AWS SSM
+        id: resolve-secrets
+        run: |
+          echo "==> Verificando existencia de parámetros en AWS SSM Parameter Store..."
+          
+          # 1. API Key
+          EXISTING_KEY=$(aws ssm get-parameter --name "/ayuda-panama/${ENVIRONMENT}/api-key" --query "Parameter.Value" --output text --region "${AWS_REGION}" 2>/dev/null || echo "")
+          if [ -n "$EXISTING_KEY" ]; then
+            echo "✓ API Key recuperada desde SSM."
+            APP_API_KEY="$EXISTING_KEY"
+          elif [ -n "${{ secrets.APP_API_KEY }}" ]; then
+            APP_API_KEY="${{ secrets.APP_API_KEY }}"
+            echo "✓ API Key obtenida desde GitHub Secrets."
+          else
+            APP_API_KEY="$(openssl rand -hex 24)"
+            echo "✓ Nueva API Key generada criptográficamente."
+          fi
+
+          # 2. API Secret
+          EXISTING_SECRET=$(aws ssm get-parameter --name "/ayuda-panama/${ENVIRONMENT}/api-secret" --with-decryption --query "Parameter.Value" --output text --region "${AWS_REGION}" 2>/dev/null || echo "")
+          if [ -n "$EXISTING_SECRET" ]; then
+            echo "✓ API Secret recuperado desde SSM."
+            APP_API_SECRET="$EXISTING_SECRET"
+          elif [ -n "${{ secrets.APP_API_SECRET }}" ]; then
+            APP_API_SECRET="${{ secrets.APP_API_SECRET }}"
+            echo "✓ API Secret obtenido desde GitHub Secrets."
+          else
+            APP_API_SECRET="$(openssl rand -hex 32)"
+            echo "✓ Nuevo API Secret generado criptográficamente."
+          fi
+
+          # 3. Admin Key
+          EXISTING_ADMIN=$(aws ssm get-parameter --name "/ayuda-panama/${ENVIRONMENT}/admin-key" --with-decryption --query "Parameter.Value" --output text --region "${AWS_REGION}" 2>/dev/null || echo "")
+          if [ -n "$EXISTING_ADMIN" ]; then
+            echo "✓ Admin Key recuperada desde SSM."
+            ADMIN_SECRET_KEY="$EXISTING_ADMIN"
+          elif [ -n "${{ secrets.ADMIN_SECRET_KEY }}" ]; then
+            ADMIN_SECRET_KEY="${{ secrets.ADMIN_SECRET_KEY }}"
+            echo "✓ Admin Key obtenida desde GitHub Secrets."
+          else
+            ADMIN_SECRET_KEY="$(openssl rand -hex 24)"
+            echo "✓ Nueva Admin Key generada criptográficamente."
+          fi
+
+          # Asegurar que queden persistidos en SSM (SecureString cifrado con KMS)
+          aws ssm put-parameter --name "/ayuda-panama/${ENVIRONMENT}/api-secret" --type "SecureString" --value "${APP_API_SECRET}" --overwrite --region "${AWS_REGION}" > /dev/null || true
+          aws ssm put-parameter --name "/ayuda-panama/${ENVIRONMENT}/admin-key" --type "SecureString" --value "${ADMIN_SECRET_KEY}" --overwrite --region "${AWS_REGION}" > /dev/null || true
+
+          # Exportar enmascaradas
+          echo "::add-mask::$APP_API_KEY"
+          echo "::add-mask::$APP_API_SECRET"
+          echo "::add-mask::$ADMIN_SECRET_KEY"
+          echo "app_api_key=$APP_API_KEY" >> "$GITHUB_OUTPUT"
+          echo "app_api_secret=$APP_API_SECRET" >> "$GITHUB_OUTPUT"
+          echo "admin_secret_key=$ADMIN_SECRET_KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Desplegar CloudFormation Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/cloudformation.yaml \
+            --stack-name "${STACK_NAME}" \
+            --parameter-overrides \
+                Environment="${ENVIRONMENT}" \
+                AppApiKey="${{ steps.resolve-secrets.outputs.app_api_key }}" \
+                AppApiSecret="${{ steps.resolve-secrets.outputs.app_api_secret }}" \
+                AdminSecretKey="${{ steps.resolve-secrets.outputs.admin_secret_key }}" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region "${AWS_REGION}"
+
+      - name: Resumen de Despliegue de Infraestructura
+        run: |
+          HTTP_URL=$(aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl'].OutputValue" \
+            --output text \
+            --region "${AWS_REGION}")
+
+          echo "### 🏗️ Despliegue de Infraestructura Exitoso" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Stack**: \`${STACK_NAME}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Endpoint API HTTP**: \`${HTTP_URL}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dominio Oficial**: \`https://ayudapanama-api.fernandogonzalez.dev\`" >> $GITHUB_STEP_SUMMARY

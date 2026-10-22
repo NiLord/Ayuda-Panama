@@ -78,8 +78,10 @@ class TelemetryService {
         if (permission == LocationPermission.whileInUse ||
             permission == LocationPermission.always) {
           posicion = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.high,
-            timeLimit: const Duration(seconds: 4),
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 4),
+            ),
           );
         }
       }

@@ -72,9 +72,9 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   int _discapacitados = 0;
   bool _requiereAlbergue = false;
   bool _requiereAguaAlimentos = false;
-  int _colchonesDoble = 1;
-  int _kitsHigiene = 1;
-  int _kitsBebe = 0;
+  final int _colchonesDoble = 1;
+  final int _kitsHigiene = 1;
+  final int _kitsBebe = 0;
 
   // Total calculado automáticamente basado en el desglose del detalle
   int get _totalOcupantes =>
@@ -703,7 +703,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 // Selector de Provincia (Nivel Nacional)
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  value: _provincia,
+                  initialValue: _provincia,
                   decoration: const InputDecoration(labelText: 'Provincia / Comarca', border: OutlineInputBorder()),
                   items: PanamaDpaService.getProvincias()
                       .map((p) => DropdownMenuItem(value: p, child: Text(p)))
@@ -724,8 +724,9 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
 
                 // Selector de Distrito (Filtrado por Provincia)
                 DropdownButtonFormField<String>(
+                  key: ValueKey('dist_$_provincia'),
                   isExpanded: true,
-                  value: PanamaDpaService.getDistritos(_provincia).contains(_distrito)
+                  initialValue: PanamaDpaService.getDistritos(_provincia).contains(_distrito)
                       ? _distrito
                       : (PanamaDpaService.getDistritos(_provincia).isNotEmpty ? PanamaDpaService.getDistritos(_provincia).first : null),
                   decoration: const InputDecoration(labelText: 'Distrito', border: OutlineInputBorder()),
@@ -746,8 +747,9 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
 
                 // Selector de Corregimiento (Filtrado por Distrito)
                 DropdownButtonFormField<String>(
+                  key: ValueKey('corr_${_provincia}_$_distrito'),
                   isExpanded: true,
-                  value: PanamaDpaService.getCorregimientos(_provincia, _distrito).contains(_corregimiento)
+                  initialValue: PanamaDpaService.getCorregimientos(_provincia, _distrito).contains(_corregimiento)
                       ? _corregimiento
                       : (PanamaDpaService.getCorregimientos(_provincia, _distrito).isNotEmpty ? PanamaDpaService.getCorregimientos(_provincia, _distrito).first : null),
                   decoration: const InputDecoration(labelText: 'Corregimiento', border: OutlineInputBorder()),
@@ -812,30 +814,36 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
-                ...NivelHabitabilidad.values.map((nivel) {
-                  Color color;
-                  switch (nivel) {
-                    case NivelHabitabilidad.habitable:
-                      color = Colors.green;
-                      break;
-                    case NivelHabitabilidad.accesoRestringido:
-                      color = Colors.amber.shade700;
-                      break;
-                    case NivelHabitabilidad.inhabitable:
-                      color = Colors.red;
-                      break;
-                    case NivelHabitabilidad.colapsoTotal:
-                      color = Colors.purple.shade800;
-                      break;
-                  }
-                  return RadioListTile<NivelHabitabilidad>(
-                    value: nivel,
-                    groupValue: _habitabilidad,
-                    secondary: CircleAvatar(backgroundColor: color, radius: 10),
-                    title: Text(nivel.label, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    onChanged: (val) => setState(() => _habitabilidad = val!),
-                  );
-                }),
+                RadioGroup<NivelHabitabilidad>(
+                  groupValue: _habitabilidad,
+                  onChanged: (val) {
+                    if (val != null) setState(() => _habitabilidad = val);
+                  },
+                  child: Column(
+                    children: NivelHabitabilidad.values.map((nivel) {
+                      Color color;
+                      switch (nivel) {
+                        case NivelHabitabilidad.habitable:
+                          color = Colors.green;
+                          break;
+                        case NivelHabitabilidad.accesoRestringido:
+                          color = Colors.amber.shade700;
+                          break;
+                        case NivelHabitabilidad.inhabitable:
+                          color = Colors.red;
+                          break;
+                        case NivelHabitabilidad.colapsoTotal:
+                          color = Colors.purple.shade800;
+                          break;
+                      }
+                      return RadioListTile<NivelHabitabilidad>(
+                        value: nivel,
+                        secondary: CircleAvatar(backgroundColor: color, radius: 10),
+                        title: Text(nivel.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      );
+                    }).toList(),
+                  ),
+                ),
                 const Divider(),
                 SwitchListTile(
                   title: const Text('¿Hay riesgo inminente de colapso por réplicas?'),

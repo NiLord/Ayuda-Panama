@@ -56,7 +56,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
   String _filtroProvincia = 'TODAS';
   String _filtroDistrito = 'TODOS';
   String _filtroSincronizacion = 'TODOS'; // 'TODOS', 'SYNCED', 'PENDING', 'MINE'
-  String _filtroHabitabilidad = 'TODOS';
+  final String _filtroHabitabilidad = 'TODOS';
 
   ReporterProfile? _myProfile;
 
@@ -270,7 +270,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     isExpanded: true,
-                    value: _filtroProvincia,
+                    initialValue: _filtroProvincia,
                     decoration: const InputDecoration(
                       labelText: 'Provincia',
                       contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -289,7 +289,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     isExpanded: true,
-                    value: distritos.contains(_filtroDistrito) ? _filtroDistrito : 'TODOS',
+                    initialValue: distritos.contains(_filtroDistrito) ? _filtroDistrito : 'TODOS',
                     decoration: const InputDecoration(
                       labelText: 'Distrito',
                       contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),

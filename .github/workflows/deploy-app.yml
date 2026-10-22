@@ -1,0 +1,75 @@
+name: Frontend App (Flutter Mobile)
+
+on:
+  push:
+    tags:
+      - 'app-v*'
+  pull_request:
+    paths:
+      - 'frontend/**'
+
+jobs:
+  analyze-and-test:
+    name: Flutter Analyze & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Instalar dependencias
+        run: |
+          cd frontend
+          flutter pub get
+
+      - name: Análisis Estático de Código
+        run: |
+          cd frontend
+          flutter analyze
+
+      - name: Pruebas Unitarias y de Widgets
+        run: |
+          cd frontend
+          flutter test
+
+  build-release:
+    name: Compilar Artefactos Release
+    needs: analyze-and-test
+    if: startsWith(github.ref, 'refs/tags/app-v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Instalar dependencias
+        run: |
+          cd frontend
+          flutter pub get
+
+      - name: Compilar APK Android Release
+        run: |
+          cd frontend
+          flutter build apk --release
+
+      - name: Publicar Artefacto de Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: ayuda-panama-${{ github.ref_name }}.apk
+          path: frontend/build/app/outputs/flutter-apk/app-release.apk
