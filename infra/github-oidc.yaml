@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Configuración de GitHub Actions OIDC Provider y Rol IAM para despliegues
+  seguros sin claves de acceso estáticas (repositorio NiLord/Ayuda-Panama).
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: NiLord
+    Description: Usuario u organización de GitHub propietaria del repositorio.
+
+  RepositoryName:
+    Type: String
+    Default: Ayuda-Panama
+    Description: Nombre del repositorio en GitHub.
+
+Resources:
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c5876104d10756793772d16e6fe840d52b261cb
+
+  GitHubActionsDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GitHubActions-AyudaPanama-DeployRole
+      Description: Rol asumido exclusivamente por el workflow de GitHub Actions del repositorio NiLord/Ayuda-Panama.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !GetAtt GitHubOIDCProvider.Arn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${RepositoryName}:*
+      Policies:
+        - PolicyName: GitHubActionsDeployPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                  - lambda:*
+                  - apigateway:*
+                  - dynamodb:*
+                  - s3:*
+                  - ssm:*
+                  - iam:GetRole
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:PassRole
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                Resource: '*'
+
+Outputs:
+  RoleArn:
+    Description: ARN del Rol IAM para configurar en GitHub Secrets como AWS_ROLE_TO_ASSUME
+    Value: !GetAtt GitHubActionsDeployRole.Arn
+
+  OidcProviderArn:
+    Description: ARN del Proveedor OIDC de GitHub
+    Value: !GetAtt GitHubOIDCProvider.Arn
