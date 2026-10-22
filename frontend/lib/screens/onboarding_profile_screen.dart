@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_messages.dart';
 import '../models/disaster_report.dart';
 import '../services/reporter_profile_service.dart';
 import 'home_screen.dart';
 
 class OnboardingProfileScreen extends StatefulWidget {
-  const OnboardingProfileScreen({super.key});
+  final bool isFirstReportFlow;
+  const OnboardingProfileScreen({super.key, this.isFirstReportFlow = false});
 
   @override
   State<OnboardingProfileScreen> createState() => _OnboardingProfileScreenState();
@@ -41,17 +43,22 @@ class _OnboardingProfileScreenState extends State<OnboardingProfileScreen> {
     );
 
     if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      if (widget.isFirstReportFlow) {
+        Navigator.of(context).pop(true);
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final msg = AppMessages.current;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Configuración Inicial'),
+        title: Text(widget.isFirstReportFlow ? msg.profileTitleReporter : msg.profileTitleInitial),
         centerTitle: true,
         backgroundColor: Colors.red.shade800,
         foregroundColor: Colors.white,
@@ -65,62 +72,63 @@ class _OnboardingProfileScreenState extends State<OnboardingProfileScreen> {
             children: [
               const Icon(Icons.emergency_share, size: 64, color: Colors.red),
               const SizedBox(height: 12),
-              const Text(
-                'Ayuda Panamá',
+              Text(
+                msg.appTitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Configura tus datos de contacto una sola vez. Se reutilizarán automáticamente en cada reporte para que no pierdas tiempo en emergencias.',
+              Text(
+                msg.profileDescription,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.black54),
+                style: const TextStyle(color: Colors.black54),
               ),
               const SizedBox(height: 24),
               TextFormField(
                 controller: _nombreCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Tu Nombre Completo *',
-                  prefixIcon: Icon(Icons.person),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: msg.profileNameLabel,
+                  prefixIcon: const Icon(Icons.person),
+                  border: const OutlineInputBorder(),
                 ),
                 validator: (val) =>
-                    (val == null || val.trim().isEmpty) ? 'Ingresa tu nombre' : null,
+                    (val == null || val.trim().isEmpty) ? msg.profileNameError : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _cedulaCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Tu Cédula de Identidad Personal *',
-                  prefixIcon: Icon(Icons.credit_card),
-                  helperText: 'Ej. 7-123-456 o 8-123-4567',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: msg.profileCedulaLabel,
+                  prefixIcon: const Icon(Icons.credit_card),
+                  helperText: msg.profileCedulaHelper,
+                  border: const OutlineInputBorder(),
                 ),
                 validator: (val) => (val == null || val.trim().isEmpty)
-                    ? 'Ingresa tu número de cédula'
+                    ? msg.profileCedulaError
                     : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _telefonoCtrl,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Teléfono de Contacto (+507...) *',
-                  prefixIcon: Icon(Icons.phone),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: msg.profilePhoneLabel,
+                  prefixIcon: const Icon(Icons.phone),
+                  helperText: msg.profilePhoneHelper,
+                  border: const OutlineInputBorder(),
                 ),
                 validator: (val) => (val == null || val.trim().isEmpty)
-                    ? 'Ingresa un teléfono para los rescatistas'
+                    ? msg.profilePhoneError
                     : null,
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<RolInformante>(
                 isExpanded: true,
                 initialValue: _rolSeleccionado,
-                decoration: const InputDecoration(
-                  labelText: '¿Cuál es tu rol habitual?',
-                  prefixIcon: Icon(Icons.badge),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: msg.profileRoleLabel,
+                  prefixIcon: const Icon(Icons.badge),
+                  border: const OutlineInputBorder(),
                 ),
                 items: RolInformante.values.map((r) {
                   return DropdownMenuItem(value: r, child: Text(r.label));
@@ -132,11 +140,11 @@ class _OnboardingProfileScreenState extends State<OnboardingProfileScreen> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _orgCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Organización / Institución (Opcional)',
-                  helperText: 'Ej. Cruz Roja, Junta Comunal, Independiente',
-                  prefixIcon: Icon(Icons.apartment),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: msg.profileOrgLabel,
+                  helperText: msg.profileOrgHelper,
+                  prefixIcon: const Icon(Icons.apartment),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 30),
@@ -145,9 +153,9 @@ class _OnboardingProfileScreenState extends State<OnboardingProfileScreen> {
                 icon: _guardando
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Icon(Icons.check_circle),
-                label: const Text(
-                  'Comenzar',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                label: Text(
+                  widget.isFirstReportFlow ? msg.continueToReport : msg.begin,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red.shade800,

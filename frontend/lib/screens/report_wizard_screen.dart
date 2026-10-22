@@ -83,8 +83,8 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   int get _totalOcupantes =>
       _neonatos + _ninos + _adolescentes + _adultos + _adultosMayores;
 
-  // Paso 4: Afectado y Consentimiento
-  bool _esElMismoInformante = true;
+  // Paso 0: Titular Afectado
+  bool _esElMismoInformante = false;
   ReporterProfile? _reporterProfile;
   final _afectadoNombreCtrl = TextEditingController();
   final _afectadoCedulaCtrl = TextEditingController();
@@ -302,11 +302,12 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   }
 
   Future<void> _enviarReporte() async {
-    // 1. Validar Sitio
-    if (_comunidadCtrl.text.trim().isEmpty) {
+    final msg = AppMessages.current;
+    // 1. Validar Titular / Jefe de Familia
+    if (_afectadoNombreCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor ingresa la Comunidad, Barrio o Sector (Obligatorio).'),
+        SnackBar(
+          content: Text(msg.valTitularNameReq),
           backgroundColor: Colors.red,
         ),
       );
@@ -314,69 +315,45 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
       return;
     }
 
-    // 2. Validar Censo
-    if (_totalOcupantes < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('El hogar debe tener al menos 1 ocupante en el censo.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      setState(() => _currentStep = 2);
-      return;
-    }
-
-    // 3. Validar Jefe de Familia
-    if (_afectadoNombreCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('El nombre del jefe/a de familia es obligatorio.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      setState(() => _currentStep = 3);
-      return;
-    }
-
     if (_afectadoCedulaCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('La cédula del jefe/a de familia es obligatoria.'),
+        SnackBar(
+          content: Text(msg.valTitularCedulaReq),
           backgroundColor: Colors.red,
         ),
       );
-      setState(() => _currentStep = 3);
+      setState(() => _currentStep = 0);
       return;
     }
 
     if (_afectadoTelefonoCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('El teléfono de contacto del jefe/a de familia es obligatorio.'),
+        SnackBar(
+          content: Text(msg.valTitularPhoneReq),
           backgroundColor: Colors.red,
         ),
       );
-      setState(() => _currentStep = 3);
+      setState(() => _currentStep = 0);
       return;
     }
 
-    // 4. Validar Foto de Identificación (Mínimo 1 obligatoria)
+    // 2. Validar Foto de Identificación (Mínimo 1 obligatoria)
     if (_fotoIdentificacion == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Debes adjuntar al menos 1 foto de la cédula o identificación del jefe/a de familia.'),
+        SnackBar(
+          content: Text(msg.valTitularPhotoReq),
           backgroundColor: Colors.red,
         ),
       );
-      setState(() => _currentStep = 3);
+      setState(() => _currentStep = 0);
       return;
     }
 
-    // 5. Validar Fotos de la Estructura Afectada (Mínimo 2 obligatorias)
-    if (_fotosEstructura.length < 2) {
+    // 3. Validar Sitio
+    if (_comunidadCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Debes adjuntar al menos 2 fotos de la estructura afectada (${_fotosEstructura.length}/2).'),
+          content: Text(msg.valSiteCommunityReq),
           backgroundColor: Colors.red,
         ),
       );
@@ -384,13 +361,38 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
       return;
     }
 
-    if (!_consentimientoDado) {
+    // 4. Validar Fotos de la Estructura Afectada (Mínimo 2 obligatorias)
+    if (_fotosEstructura.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Debes otorgar consentimiento para notificar a los cuerpos de auxilio.'),
+        SnackBar(
+          content: Text(msg.valStructurePhotosMin(_fotosEstructura.length)),
           backgroundColor: Colors.red,
         ),
       );
+      setState(() => _currentStep = 2);
+      return;
+    }
+
+    // 5. Validar Censo & Consentimiento
+    if (_totalOcupantes < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg.valCensusOccupantsMin),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() => _currentStep = 3);
+      return;
+    }
+
+    if (!_consentimientoDado) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg.valConsentReq),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() => _currentStep = 3);
       return;
     }
 
@@ -674,6 +676,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final msg = AppMessages.current;
     return Stack(
       children: [
         Scaffold(
@@ -686,41 +689,82 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
         type: StepperType.horizontal,
         currentStep: _currentStep,
         onStepContinue: () {
+          final msg = AppMessages.current;
           if (_currentStep == 0) {
-            if (_comunidadCtrl.text.trim().isEmpty) {
+            // Validar Titular / Jefe de Familia
+            if (_afectadoNombreCtrl.text.trim().isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Por favor ingresa la Comunidad, Barrio o Sector (Obligatorio).'),
+                SnackBar(
+                  content: Text(msg.valTitularNameReq),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+            if (_afectadoCedulaCtrl.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(msg.valTitularCedulaReq),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+            if (_afectadoTelefonoCtrl.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(msg.valTitularPhoneReq),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+            if (_fotoIdentificacion == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(msg.valTitularPhotoReq),
                   backgroundColor: Colors.red,
                 ),
               );
               return;
             }
           } else if (_currentStep == 1) {
-            if (_fotosEstructura.length < 2) {
+            // Validar Sitio
+            if (_comunidadCtrl.text.trim().isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Debes adjuntar al menos 2 fotos de la estructura afectada (${_fotosEstructura.length}/2).'),
+                  content: Text(msg.valSiteCommunityReq),
                   backgroundColor: Colors.red,
                 ),
               );
               return;
             }
           } else if (_currentStep == 2) {
-            if (_totalOcupantes < 1) {
+            // Validar Daños
+            if (_fotosEstructura.length < 2) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('El censo debe incluir al menos 1 persona en el hogar según el desglose.'),
+                SnackBar(
+                  content: Text(msg.valStructurePhotosMin(_fotosEstructura.length)),
                   backgroundColor: Colors.red,
                 ),
               );
               return;
             }
           } else if (_currentStep == 3) {
-            if (_fotoIdentificacion == null) {
+            // Validar Censo & Consentimiento
+            if (_totalOcupantes < 1) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Debes adjuntar al menos 1 foto de la cédula o identificación del jefe/a de familia.'),
+                SnackBar(
+                  content: Text(msg.valCensusOccupantsMin),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+            if (!_consentimientoDado) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(msg.valConsentReq),
                   backgroundColor: Colors.red,
                 ),
               );
@@ -754,7 +798,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     ),
-                    child: const Text('ATRÁS'),
+                    child: Text(msg.back),
                   )
                 else
                   OutlinedButton(
@@ -762,7 +806,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     ),
-                    child: const Text('CANCELAR'),
+                    child: Text(msg.cancel),
                   ),
                 const SizedBox(width: 12),
                 // Botón SIGUIENTE o FINALIZAR a la DERECHA
@@ -780,7 +824,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                             height: 20,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                           )
-                        : Text(isLast ? (widget.initialReport != null ? 'ACTUALIZAR Y ENVIAR' : 'FINALIZAR Y ENVIAR') : 'SIGUIENTE'),
+                        : Text(isLast ? (widget.initialReport != null ? msg.updateAndSend : msg.finishAndSend) : msg.next),
                   ),
                 ),
               ],
@@ -789,11 +833,177 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
         },
         steps: [
           // ---------------------------------------------------------------
+          // PASO 0: TITULAR AFECTADO & JEFE DE FAMILIA
+          // ---------------------------------------------------------------
+          Step(
+            title: Text(msg.stepTitular),
+            isActive: _currentStep >= 0,
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SwitchListTile(
+                  title: Text(msg.titularReportingOwnHome),
+                  subtitle: Text(_esElMismoInformante
+                      ? msg.titularReportingOwnHomeSubTrue
+                      : msg.titularReportingOwnHomeSubFalse),
+                  value: _esElMismoInformante,
+                  onChanged: (val) {
+                    setState(() {
+                      _esElMismoInformante = val;
+                      if (_esElMismoInformante && _reporterProfile != null) {
+                        _afectadoNombreCtrl.text = _reporterProfile!.nombre;
+                        _afectadoCedulaCtrl.text = _reporterProfile!.cedula;
+                        _afectadoTelefonoCtrl.text = _reporterProfile!.telefono;
+                      } else if (!_esElMismoInformante) {
+                        _afectadoNombreCtrl.clear();
+                        _afectadoCedulaCtrl.clear();
+                        _afectadoTelefonoCtrl.clear();
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _afectadoNombreCtrl,
+                  decoration: InputDecoration(
+                    labelText: msg.titularNameLabel,
+                    helperText: msg.titularNameHelper,
+                    prefixIcon: const Icon(Icons.person),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _afectadoCedulaCtrl,
+                  decoration: InputDecoration(
+                    labelText: msg.titularCedulaLabel,
+                    helperText: msg.titularCedulaHelper,
+                    prefixIcon: const Icon(Icons.credit_card),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _afectadoTelefonoCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: msg.titularPhoneLabel,
+                    helperText: msg.titularPhoneHelper,
+                    prefixIcon: const Icon(Icons.phone),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Sección Foto de Identificación (Mínimo 1 obligatoria)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _fotoIdentificacion != null ? Colors.green.shade400 : Colors.red.shade300,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            msg.titularIdPhotoTitle,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _fotoIdentificacion != null ? Colors.green.shade100 : Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _fotoIdentificacion != null ? msg.titularIdPhotoCount(1) : msg.titularIdPhotoMissing,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: _fotoIdentificacion != null ? Colors.green.shade800 : Colors.red.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        msg.titularIdPhotoInstruction,
+                        style: const TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _capturarFotoIdentificacion(ImageSource.camera),
+                              icon: const Icon(Icons.camera_alt),
+                              label: Text(msg.camera),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _capturarFotoIdentificacion(ImageSource.gallery),
+                              icon: const Icon(Icons.photo_library),
+                              label: Text(msg.gallery),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_fotoIdentificacion != null) ...[
+                        const SizedBox(height: 12),
+                        Stack(
+                          alignment: Alignment.topRight,
+                          children: [
+                            Container(
+                              height: 140,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.green.shade400),
+                                image: DecorationImage(
+                                  image: FileImage(File(_fotoIdentificacion!.rutaLocal)),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: GestureDetector(
+                                onTap: () => setState(() => _fotoIdentificacion = null),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // ---------------------------------------------------------------
           // PASO 1: UBICACIÓN
           // ---------------------------------------------------------------
           Step(
-            title: const Text('Sitio'),
-            isActive: _currentStep >= 0,
+            title: Text(msg.stepSite),
+            isActive: _currentStep >= 1,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -851,7 +1061,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 DropdownButtonFormField<String>(
                   isExpanded: true,
                   initialValue: _provincia,
-                  decoration: const InputDecoration(labelText: 'Provincia / Comarca', border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: msg.siteProvinceLabel, border: const OutlineInputBorder()),
                   items: PanamaDpaService.getProvincias()
                       .map((p) => DropdownMenuItem(value: p, child: Text(p)))
                       .toList(),
@@ -876,7 +1086,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                   initialValue: PanamaDpaService.getDistritos(_provincia).contains(_distrito)
                       ? _distrito
                       : (PanamaDpaService.getDistritos(_provincia).isNotEmpty ? PanamaDpaService.getDistritos(_provincia).first : null),
-                  decoration: const InputDecoration(labelText: 'Distrito', border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: msg.siteDistrictLabel, border: const OutlineInputBorder()),
                   items: PanamaDpaService.getDistritos(_provincia)
                       .map((d) => DropdownMenuItem(value: d, child: Text(d)))
                       .toList(),
@@ -899,7 +1109,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                   initialValue: PanamaDpaService.getCorregimientos(_provincia, _distrito).contains(_corregimiento)
                       ? _corregimiento
                       : (PanamaDpaService.getCorregimientos(_provincia, _distrito).isNotEmpty ? PanamaDpaService.getCorregimientos(_provincia, _distrito).first : null),
-                  decoration: const InputDecoration(labelText: 'Corregimiento', border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: msg.siteCorregimientoLabel, border: const OutlineInputBorder()),
                   items: PanamaDpaService.getCorregimientos(_provincia, _distrito)
                       .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                       .toList(),
@@ -912,11 +1122,11 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 // Texto Libre para Comunidad / Barrio con auto-normalización (Obligatorio)
                 TextField(
                   controller: _comunidadCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Comunidad / Barrio / Urbanización *',
+                  decoration: InputDecoration(
+                    labelText: msg.siteCommunityLabel,
                     floatingLabelBehavior: FloatingLabelBehavior.always,
-                    helperText: 'Obligatorio. Se normaliza automáticamente sin errores de tipeo',
-                    border: OutlineInputBorder(),
+                    helperText: msg.siteCommunityHelper,
+                    border: const OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -924,11 +1134,10 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 // Calle / Dirección con auto-normalización (Opcional)
                 TextField(
                   controller: _calleCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Calle / Número de Vivienda (Opcional)',
+                  decoration: InputDecoration(
+                    labelText: msg.siteStreetLabel,
                     floatingLabelBehavior: FloatingLabelBehavior.always,
-                    helperText: 'Ej. Calle 3ra, Casa #45, Edificio Mirador',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -936,29 +1145,28 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 // Punto de Referencia (Opcional)
                 TextField(
                   controller: _referenciaCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Punto de referencia',
+                  decoration: InputDecoration(
+                    labelText: msg.siteReferenceLabel,
                     floatingLabelBehavior: FloatingLabelBehavior.always,
-                    helperText: 'Opcional. Ej. Frente a la tienda, al lado del parque',
-                    border: OutlineInputBorder(),
+                    helperText: msg.siteReferenceHelper,
+                    border: const OutlineInputBorder(),
                   ),
                 ),
               ],
             ),
           ),
-
           // ---------------------------------------------------------------
           // PASO 2: ESTRUCTURA & HABITABILIDAD (ATC-20)
           // ---------------------------------------------------------------
           Step(
-            title: const Text('Daños'),
-            isActive: _currentStep >= 1,
+            title: Text(msg.stepDamages),
+            isActive: _currentStep >= 2,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'Semáforo de Habitabilidad (ATC-20):',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Text(
+                  msg.damagesHabitabilityTitle,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
                 RadioGroup<NivelHabitabilidad>(
@@ -993,13 +1201,13 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 ),
                 const Divider(),
                 SwitchListTile(
-                  title: const Text('¿Hay riesgo inminente de colapso por réplicas?'),
+                  title: Text(msg.damagesCollapseRisk),
                   value: _riesgoColapso,
                   activeThumbColor: Colors.red,
                   onChanged: (val) => setState(() => _riesgoColapso = val),
                 ),
                 SwitchListTile(
-                  title: const Text('¿Hay fuga de gas inflamable?'),
+                  title: Text(msg.damagesGasLeak),
                   value: _fugaGas,
                   activeThumbColor: Colors.red,
                   onChanged: (val) => setState(() => _fugaGas = val),
@@ -1014,10 +1222,9 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 TextField(
                   controller: _descripcionDanoCtrl,
                   maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Breve descripción de los daños visibles',
-                    helperText: 'Ej. Pared rajada, caída de techo, vidrios rotos',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: msg.damagesDescriptionLabel,
+                    border: const OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -1039,9 +1246,9 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Fotos de la Estructura *',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          Text(
+                            msg.damagesPhotosTitle,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1050,7 +1257,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              '${_fotosEstructura.length} de 2 mínimas',
+                              msg.damagesPhotosCount(_fotosEstructura.length),
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -1061,9 +1268,9 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Obligatorio: Adjunta al menos 2 fotos de la estructura (fachada, grietas, columnas o techo)',
-                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      Text(
+                        msg.damagesPhotosInstruction,
+                        style: const TextStyle(fontSize: 12, color: Colors.black54),
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -1072,7 +1279,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                             child: OutlinedButton.icon(
                               onPressed: () => _capturarFotoEstructura(ImageSource.camera),
                               icon: const Icon(Icons.camera_alt),
-                              label: const Text('Cámara'),
+                              label: Text(msg.camera),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1080,7 +1287,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                             child: OutlinedButton.icon(
                               onPressed: () => _capturarFotoEstructura(ImageSource.gallery),
                               icon: const Icon(Icons.photo_library),
-                              label: const Text('Galería'),
+                              label: Text(msg.gallery),
                             ),
                           ),
                         ],
@@ -1136,13 +1343,12 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
               ],
             ),
           ),
-
           // ---------------------------------------------------------------
-          // PASO 3: PERSONAS Y ASISTENCIA (SPHERE / INSARAG)
+          // PASO 3: PERSONAS, ASISTENCIA & CONSENTIMIENTO
           // ---------------------------------------------------------------
           Step(
-            title: const Text('Censo'),
-            isActive: _currentStep >= 2,
+            title: Text(msg.stepCensus),
+            isActive: _currentStep >= 3,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -1155,14 +1361,14 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.red),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.warning, color: Colors.red),
-                        SizedBox(width: 8),
+                        const Icon(Icons.warning, color: Colors.red),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'ALERTA P1: Se activará protocolo urgente de Búsqueda y Rescate (USAR) para SINAPROC y Bomberos.',
-                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                            msg.censusCriticalTrappedWarning,
+                            style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
@@ -1209,36 +1415,36 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                   ),
                 ),
 
-                const Text(
-                  'Desglose por edad (determina el total de ocupantes):',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
+                Text(
+                  msg.censusFamilyBreakdownTitle,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
                 ),
                 const SizedBox(height: 4),
-                _buildCounter('Bebés (0 a 2 años):', _neonatos, (v) {
+                _buildCounter(msg.censusNeonatos, _neonatos, (v) {
                   setState(() {
                     _neonatos = v;
                     _clampearCondicionesEspeciales();
                   });
                 }),
-                _buildCounter('Niños (3 a 12 años):', _ninos, (v) {
+                _buildCounter(msg.censusNinos, _ninos, (v) {
                   setState(() {
                     _ninos = v;
                     _clampearCondicionesEspeciales();
                   });
                 }),
-                _buildCounter('Adolescentes (13 a 17 años):', _adolescentes, (v) {
+                _buildCounter(msg.censusAdolescentes, _adolescentes, (v) {
                   setState(() {
                     _adolescentes = v;
                     _clampearCondicionesEspeciales();
                   });
                 }),
-                _buildCounter('Adultos (18 a 59 años):', _adultos, (v) {
+                _buildCounter(msg.censusAdultos, _adultos, (v) {
                   setState(() {
                     _adultos = v;
                     _clampearCondicionesEspeciales();
                   });
                 }),
-                _buildCounter('Adultos mayores (60+ años):', _adultosMayores, (v) {
+                _buildCounter(msg.censusAdultosMayores, _adultosMayores, (v) {
                   setState(() {
                     _adultosMayores = v;
                     _clampearCondicionesEspeciales();
@@ -1246,20 +1452,20 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 }),
 
                 const Divider(height: 24),
-                const Text(
-                  'Condiciones de vulnerabilidad específicas:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
+                Text(
+                  msg.censusVulnerableTitle,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
                 ),
                 const SizedBox(height: 4),
                 _buildCounter(
-                  'Mujeres embarazadas:',
+                  msg.censusEmbarazadas,
                   _embarazadas,
                   (v) => setState(() => _embarazadas = v),
                   maxVal: _totalOcupantes,
                   helperSubtitle: '(Máx. $_totalOcupantes según total del hogar)',
                 ),
                 _buildCounter(
-                  'Personas con discapacidad:',
+                  msg.censusDiscapacidad,
                   _discapacitados,
                   (v) => setState(() => _discapacitados = v),
                   maxVal: _totalOcupantes,
@@ -1267,13 +1473,13 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 ),
 
                 const Divider(height: 24),
-                const Text(
-                  'Emergencias de rescate y auxilio médico inmediato:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
+                Text(
+                  msg.censusMedicalTitle,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
                 ),
                 const SizedBox(height: 4),
                 _buildCounter(
-                  'Personas atrapadas o desaparecidas:',
+                  msg.censusAtrapados,
                   _atrapados,
                   (v) => setState(() => _atrapados = v),
                   isCritical: true,
@@ -1281,7 +1487,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                   helperSubtitle: '(Máx. $_totalOcupantes según total del hogar)',
                 ),
                 _buildCounter(
-                  'Personas con lesiones que requieren hospital:',
+                  msg.censusLesionados,
                   _lesionados,
                   (v) => setState(() => _lesionados = v),
                   maxVal: _totalOcupantes,
@@ -1289,183 +1495,18 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 ),
                 const Divider(),
                 SwitchListTile(
-                  title: const Text('¿Requiere albergue temporal de inmediato?'),
+                  title: Text(msg.censusShelterQuestion),
                   value: _requiereAlbergue,
                   onChanged: (val) => setState(() => _requiereAlbergue = val),
                 ),
                 SwitchListTile(
-                  title: const Text('¿Requiere agua potable y alimentos de auxilio?'),
+                  title: Text(msg.censusWaterFoodQuestion),
                   value: _requiereAguaAlimentos,
                   onChanged: (val) => setState(() => _requiereAguaAlimentos = val),
                 ),
-              ],
-            ),
-          ),
+                const SizedBox(height: 12),
 
-          // ---------------------------------------------------------------
-          // PASO 4: TITULAR AFECTADO & CONSENTIMIENTO (LEY 81)
-          // ---------------------------------------------------------------
-          Step(
-            title: const Text('Fin'),
-            isActive: _currentStep >= 3,
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SwitchListTile(
-                  title: const Text('¿Estás reportando tu propia casa?'),
-                  subtitle: Text(_esElMismoInformante
-                      ? 'Se usan tus datos guardados como jefe de familia'
-                      : 'Ingresa los datos del jefe de la familia afectada'),
-                  value: _esElMismoInformante,
-                  onChanged: (val) {
-                    setState(() {
-                      _esElMismoInformante = val;
-                      if (_esElMismoInformante && _reporterProfile != null) {
-                        _afectadoNombreCtrl.text = _reporterProfile!.nombre;
-                        _afectadoCedulaCtrl.text = _reporterProfile!.cedula;
-                        _afectadoTelefonoCtrl.text = _reporterProfile!.telefono;
-                      } else if (!_esElMismoInformante) {
-                        _afectadoNombreCtrl.clear();
-                        _afectadoCedulaCtrl.clear();
-                        _afectadoTelefonoCtrl.clear();
-                      }
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _afectadoNombreCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Nombre Completo del Jefe/a de Familia *',
-                    helperText: 'Obligatorio para el registro humanitario oficial',
-                    prefixIcon: Icon(Icons.person),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _afectadoCedulaCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Cédula de Identidad del Jefe/a de Familia *',
-                    helperText: 'Obligatorio. Ej. 7-123-456, 8-123-4567 o Pasaporte',
-                    prefixIcon: Icon(Icons.credit_card),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _afectadoTelefonoCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Teléfono de Contacto del Jefe/a de Familia *',
-                    helperText: 'Obligatorio para que los rescatistas coordinen auxilio',
-                    prefixIcon: Icon(Icons.phone),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Sección Foto de Identificación (Mínimo 1 obligatoria)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: _fotoIdentificacion != null ? Colors.green.shade400 : Colors.red.shade300,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Foto de la Cédula / Identificación *',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: _fotoIdentificacion != null ? Colors.green.shade100 : Colors.red.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              _fotoIdentificacion != null ? '1 de 1 agregada' : 'Falta foto',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: _fotoIdentificacion != null ? Colors.green.shade800 : Colors.red.shade800,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Obligatorio: Fotografía legible de la cédula panameña o pasaporte del jefe/a de familia',
-                        style: TextStyle(fontSize: 12, color: Colors.black54),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () => _capturarFotoIdentificacion(ImageSource.camera),
-                              icon: const Icon(Icons.camera_alt),
-                              label: const Text('Cámara'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () => _capturarFotoIdentificacion(ImageSource.gallery),
-                              icon: const Icon(Icons.photo_library),
-                              label: const Text('Galería'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_fotoIdentificacion != null) ...[
-                        const SizedBox(height: 12),
-                        Stack(
-                          alignment: Alignment.topRight,
-                          children: [
-                            Container(
-                              height: 140,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.green.shade400),
-                                image: DecorationImage(
-                                  image: FileImage(File(_fotoIdentificacion!.rutaLocal)),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(6),
-                              child: GestureDetector(
-                                onTap: () => setState(() => _fotoIdentificacion = null),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.close, size: 16, color: Colors.white),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
+                // Consentimiento Informado (Ley 81)
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -1476,13 +1517,13 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                   child: CheckboxListTile(
                     value: _consentimientoDado,
                     contentPadding: EdgeInsets.zero,
-                    title: const Text(
-                      'Consentimiento Informado (Ley 81 de Panamá)',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    title: Text(
+                      msg.consentTitle,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
-                    subtitle: const Text(
-                      'Autorizo que los datos de contacto y daños sean transmitidos exclusivamente a SINAPROC, Cruz Roja y autoridades para coordinar ayuda y rescate. El mapa público jamás mostrará nombres ni teléfonos.',
-                      style: TextStyle(fontSize: 12),
+                    subtitle: Text(
+                      msg.consentBody,
+                      style: const TextStyle(fontSize: 12),
                     ),
                     onChanged: (val) => setState(() => _consentimientoDado = val ?? true),
                   ),

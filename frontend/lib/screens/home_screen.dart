@@ -66,15 +66,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final msg = AppMessages.current;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ayuda Panamá'),
+        title: Text(msg.appTitle),
         backgroundColor: Colors.red.shade800,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.person_outline),
-            tooltip: 'Mi Perfil de Informante',
+            tooltip: msg.homeEditProfileTooltip,
             onPressed: () async {
               await Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const OnboardingProfileScreen()),
@@ -101,18 +102,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Icon(Icons.warning_amber_rounded, color: Colors.red.shade800, size: 36),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Emergencia Sísmica Activa',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red),
+                          msg.homeEmergencyBannerTitle,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          'Tu reporte ayuda a SINAPROC y a los cuerpos de rescate a priorizar auxilio.',
-                          style: TextStyle(fontSize: 13, color: Colors.black87),
+                          msg.homeEmergencyBannerSubtitle,
+                          style: const TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                       ],
                     ),
@@ -138,7 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        '$_pendingReports reporte(s) guardado(s) offline.',
+                        msg.homeOfflineReportsCount(_pendingReports),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -151,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: _sincronizando
                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('SINCRONIZAR'),
+                          : Text(msg.homeSyncBtn),
                     ),
                   ],
                 ),
@@ -160,6 +161,17 @@ class _HomeScreenState extends State<HomeScreen> {
             // Botón Principal: CREAR REPORTE DE EMERGENCIA
             ElevatedButton(
               onPressed: () async {
+                final isConfigured = await ReporterProfileService.isProfileConfigured();
+                if (!isConfigured) {
+                  if (!context.mounted) return;
+                  final completed = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => const OnboardingProfileScreen(isFirstReportFlow: true),
+                    ),
+                  );
+                  if (completed != true) return;
+                }
+                if (!context.mounted) return;
                 await Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const ReportWizardScreen()),
                 );
@@ -172,18 +184,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 4,
               ),
-              child: const Column(
+              child: Column(
                 children: [
-                  Icon(Icons.add_location_alt, size: 36),
-                  SizedBox(height: 8),
+                  const Icon(Icons.add_location_alt, size: 36),
+                  const SizedBox(height: 8),
                   Text(
-                    'REPORTAR DAÑO O EMERGENCIA',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    msg.homeReportBtnTitle,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
-                    'Funciona con o sin conexión a internet',
-                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                    msg.homeReportBtnSubtitle,
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
                   ),
                 ],
               ),
@@ -205,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               icon: Icon(Icons.public, color: Colors.blueGrey.shade900),
               label: Text(
-                'VER SITUACIÓN NACIONAL',
+                msg.homeMonitoringBtn,
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.blueGrey.shade900),
               ),
             ),
