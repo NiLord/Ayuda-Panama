@@ -8,6 +8,9 @@ on:
     paths:
       - 'frontend/**'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   analyze-and-test:
     name: Flutter Analyze & Tests
