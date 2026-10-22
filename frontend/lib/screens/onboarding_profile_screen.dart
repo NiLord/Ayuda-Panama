@@ -66,7 +66,7 @@ class _OnboardingProfileScreenState extends State<OnboardingProfileScreen> {
               const Icon(Icons.emergency_share, size: 64, color: Colors.red),
               const SizedBox(height: 12),
               const Text(
-                'Ayuda Los Santos',
+                'Ayuda Panamá',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),

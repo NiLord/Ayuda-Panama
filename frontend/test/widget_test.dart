@@ -8,7 +8,7 @@ void main() {
       initialScreen: OnboardingProfileScreen(),
     ));
 
-    expect(find.text('Ayuda Los Santos'), findsOneWidget);
+    expect(find.text('Ayuda Panamá'), findsOneWidget);
     expect(find.text('Tu Nombre Completo *'), findsOneWidget);
     expect(find.text('Tu Cédula de Identidad Personal *'), findsOneWidget);
     expect(find.text('Teléfono de Contacto (+507...) *'), findsOneWidget);

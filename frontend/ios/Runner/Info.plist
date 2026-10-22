@@ -6,7 +6,7 @@
 	<true/>
 	<!-- Permisos de Emergencia -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Ayuda Los Santos necesita tu ubicación geográfica para ubicar con precisión el lugar del desastre y coordinar con los rescatistas.</string>
+	<string>Ayuda Panamá necesita tu ubicación geográfica para ubicar con precisión el lugar del desastre y coordinar con los rescatistas.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Se requiere acceso a la cámara para capturar fotografías de los daños estructurales como evidencia para SINAPROC.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
@@ -14,7 +14,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Ayuda Los Santos</string>
+	<string>Ayuda Panamá</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

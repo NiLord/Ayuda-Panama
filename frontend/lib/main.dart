@@ -20,7 +20,7 @@ class AyudaLosSantosApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Ayuda Los Santos',
+      title: 'Ayuda Panamá',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
