@@ -61,3 +61,5 @@ ENV/
 *.env
 *.env.*
 !.env.example
+config*.json
+*.local

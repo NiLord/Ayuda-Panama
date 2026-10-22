@@ -16,6 +16,16 @@ Parameters:
     Default: SinaprocEmergencia2026!
     Description: Clave de autenticación para acceso de autoridades (SINAPROC / Cruz Roja) al endpoint de exportación con PII.
 
+  AppApiKey:
+    Type: String
+    NoEcho: true
+    Description: API Key requerida por la aplicación móvil Ayuda Panamá.
+
+  AppApiSecret:
+    Type: String
+    NoEcho: true
+    Description: Secreto de verificación de integridad para peticiones de Ayuda Panamá.
+
 Resources:
   # ============================================================================
   # ALMACENAMIENTO DE DATOS (DYNAMODB)
@@ -147,7 +157,7 @@ Resources:
       CorsConfiguration:
         AllowOrigins: ['*']
         AllowMethods: [GET, POST, OPTIONS]
-        AllowHeaders: ['Content-Type', 'Authorization', 'X-Api-Key', 'X-Admin-Key']
+        AllowHeaders: ['Content-Type', 'Authorization', 'X-Api-Key', 'X-App-Secret', 'X-Admin-Key']
         MaxAge: 3600
 
   HttpApiStage:
@@ -156,10 +166,32 @@ Resources:
       ApiId: !Ref HttpApi
       StageName: $default
       AutoDeploy: true
+      DefaultRouteSettings:
+        DetailedMetricsEnabled: true
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 20
 
   # ============================================================================
   # FUNCIONES LAMBDA (PYTHON 3.13)
   # ============================================================================
+  AuthorizerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-authorizer-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.authorizer.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 5
+      MemorySize: 128
+      Environment:
+        Variables:
+          APP_API_KEY: !Ref AppApiKey
+          APP_API_SECRET: !Ref AppApiSecret
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"isAuthorized": False}
+
   SubmitReportFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -231,6 +263,40 @@ Resources:
               return {"statusCode": 200, "body": "{}"}
 
   # ============================================================================
+  # AUTORIZADOR LAMBDA (HTTP API V2)
+  # ============================================================================
+  HttpApiAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: REQUEST
+      AuthorizerPayloadFormatVersion: '2.0'
+      AuthorizerResultTtlInSeconds: 300
+      EnableSimpleResponses: true
+      IdentitySource:
+        - '$request.header.x-api-key'
+        - '$request.header.x-app-secret'
+      Name: !Sub lse-authorizer-${Environment}
+      AuthorizerUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthorizerFunction.Arn}/invocations
+
+  AuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthorizerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/authorizers/*
+
+  # Parámetro en AWS Systems Manager Parameter Store para trazabilidad de la clave
+  AppApiKeyParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /ayuda-panama/${Environment}/api-key
+      Type: String
+      Value: !Ref AppApiKey
+      Description: Identificador API Key para la app móvil Ayuda Panamá.
+
+  # ============================================================================
   # INTEGRACIONES Y RUTAS DE API GATEWAY
   # ============================================================================
   SubmitIntegration:
@@ -246,6 +312,8 @@ Resources:
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: POST /api/v1/reports
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref HttpApiAuthorizer
       Target: !Sub integrations/${SubmitIntegration}
 
   PublicIntegration:
@@ -261,6 +329,8 @@ Resources:
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: GET /api/v1/reports/public
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref HttpApiAuthorizer
       Target: !Sub integrations/${PublicIntegration}
 
   PresignIntegration:
@@ -276,6 +346,8 @@ Resources:
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: POST /api/v1/uploads/presign
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref HttpApiAuthorizer
       Target: !Sub integrations/${PresignIntegration}
 
   ExportIntegration:
@@ -345,3 +417,11 @@ Outputs:
   EvidenceBucketName:
     Description: Nombre del bucket S3 para fotos de evidencia
     Value: !Ref EvidenceBucket
+
+  AuthorizerFunctionName:
+    Description: Nombre de la función Lambda autorizadora
+    Value: !Ref AuthorizerFunction
+
+  AppApiKeySsmParam:
+    Description: Parámetro SSM donde se encuentra registrado el API Key
+    Value: !Ref AppApiKeyParam

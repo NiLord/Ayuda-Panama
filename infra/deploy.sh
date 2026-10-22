@@ -8,11 +8,29 @@ ENVIRONMENT="${1:-prod}"
 STACK_NAME="lse-emergency-platform-${ENVIRONMENT}"
 
 echo "================================================================="
-echo " Despliegue de Infraestructura: Ayuda Los Santos (${ENVIRONMENT})"
+echo " Despliegue de Infraestructura: Ayuda Panamá (${ENVIRONMENT})"
 echo " Región:  ${AWS_REGION}"
 echo " Perfil:  ${AWS_PROFILE}"
 echo " Stack:   ${STACK_NAME}"
 echo "================================================================="
+
+# 0. Generación criptográfica aleatoria de API Key y Secret en memoria (si no fueron suministrados)
+APP_API_KEY="${APP_API_KEY:-$(openssl rand -hex 24)}"
+APP_API_SECRET="${APP_API_SECRET:-$(openssl rand -hex 32)}"
+
+echo "==> Generando / verificando credenciales seguras de aplicación..."
+echo "    - API Key:    ${APP_API_KEY:0:8}**************** (oculta)"
+echo "    - API Secret: ******************************** (oculto)"
+
+# Registrar el secreto en AWS SSM Parameter Store como SecureString cifrado con KMS
+echo "==> Guardando secreto en AWS SSM Parameter Store (SecureString cifrado)..."
+aws ssm put-parameter \
+  --name "/ayuda-panama/${ENVIRONMENT}/api-secret" \
+  --type "SecureString" \
+  --value "${APP_API_SECRET}" \
+  --overwrite \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" > /dev/null || echo "    (Aviso: SSM put-parameter omitido o no autorizado; continuando con CloudFormation)"
 
 # 1. Validar plantilla de CloudFormation
 echo "==> 1. Validando plantilla de CloudFormation..."
@@ -27,7 +45,10 @@ echo "==> 2. Desplegando stack con CloudFormation..."
 aws cloudformation deploy \
   --template-file cloudformation.yaml \
   --stack-name "${STACK_NAME}" \
-  --parameter-overrides Environment="${ENVIRONMENT}" \
+  --parameter-overrides \
+      Environment="${ENVIRONMENT}" \
+      AppApiKey="${APP_API_KEY}" \
+      AppApiSecret="${APP_API_SECRET}" \
   --capabilities CAPABILITY_NAMED_IAM \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
@@ -42,6 +63,7 @@ cd - > /dev/null
 
 echo "==> 4. Actualizando código de las Lambdas..."
 FUNCTIONS=(
+  "lse-authorizer-${ENVIRONMENT}"
   "lse-submit-report-${ENVIRONMENT}"
   "lse-get-public-reports-${ENVIRONMENT}"
   "lse-get-upload-presign-${ENVIRONMENT}"
@@ -68,4 +90,27 @@ aws cloudformation describe-stacks \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
 
-echo "✓ Todo listo para conectar la app móvil en Flutter."
+HTTP_API_URL=$(aws cloudformation describe-stacks \
+  --stack-name "${STACK_NAME}" \
+  --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl'].OutputValue" \
+  --output text \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}")
+
+echo ""
+echo "================================================================="
+echo " COMANDOS DE COMPILACIÓN FLUTTER (Sin archivos de texto en disco)"
+echo "================================================================="
+echo "Para compilar o ejecutar la app inyectando las claves en memoria:"
+echo ""
+echo "  flutter run \\"
+echo "    --dart-define=API_BASE_URL=\"${HTTP_API_URL}\" \\"
+echo "    --dart-define=API_KEY=\"${APP_API_KEY}\" \\"
+echo "    --dart-define=API_SECRET=\"${APP_API_SECRET}\""
+echo ""
+echo "O para compilar iOS en Release:"
+echo "  flutter build ios --release \\"
+echo "    --dart-define=API_BASE_URL=\"${HTTP_API_URL}\" \\"
+echo "    --dart-define=API_KEY=\"${APP_API_KEY}\" \\"
+echo "    --dart-define=API_SECRET=\"${APP_API_SECRET}\""
+echo "================================================================="
