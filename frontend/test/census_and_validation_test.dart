@@ -77,5 +77,78 @@ void main() {
       expect(calleOpcional.isEmpty, isTrue);
       expect(referenciaOpcional.isEmpty, isTrue);
     });
+
+    test('Photo evidence structure enforces 1 ID photo and 2+ structure photos', () {
+      final fotoId = FotoEvidencia(
+        id: 'id_001',
+        tipo: TipoFotoEvidencia.identificacion.value,
+        rutaLocal: '/path/to/cedula.jpg',
+        timestamp: DateTime.now().toUtc().toIso8601String(),
+        descripcion: 'Cédula frontal',
+      );
+
+      final fotosEstructura = [
+        FotoEvidencia(
+          id: 'est_001',
+          tipo: TipoFotoEvidencia.estructuraDano.value,
+          rutaLocal: '/path/to/grieta_pared.jpg',
+          timestamp: DateTime.now().toUtc().toIso8601String(),
+        ),
+        FotoEvidencia(
+          id: 'est_002',
+          tipo: TipoFotoEvidencia.estructuraDano.value,
+          rutaLocal: '/path/to/techo_colapsado.jpg',
+          timestamp: DateTime.now().toUtc().toIso8601String(),
+        ),
+      ];
+
+      expect(fotoId.tipo, 'IDENTIFICACION');
+      expect(fotosEstructura.length, greaterThanOrEqualTo(2));
+      for (final f in fotosEstructura) {
+        expect(f.tipo, 'ESTRUCTURA_DANO');
+      }
+
+      final todas = [fotoId, ...fotosEstructura];
+      expect(todas.length, 3);
+      final jsonList = todas.map((e) => e.toJson()).toList();
+      expect(jsonList.first['tipo'], 'IDENTIFICACION');
+      expect(jsonList[1]['tipo'], 'ESTRUCTURA_DANO');
+    });
+
+    test('Multi-event architecture is extensible for future disasters', () {
+      final reporteInundacion = DisasterReport(
+        reportId: 'rep_inundacion_001',
+        timestamp: DateTime.now().toUtc().toIso8601String(),
+        consentimientoInformado: true,
+        tipoEvento: TipoEvento.inundacion.value,
+        codigoEvento: 'INUNDACION_CHIRIQUI_2026',
+        metadatosEvento: {
+          'nivel_agua_cm': 120,
+          'rio_desbordado': 'Río Caldera',
+          'perdida_cultivos': true,
+        },
+        reporterId: 'rep_002',
+        rolInformante: 'LIDER_COMUNITARIO',
+        latitud: 8.775,
+        longitud: -82.428,
+        provincia: 'Chiriquí',
+        distrito: 'Boquete',
+        corregimiento: 'Bajo Boquete',
+        comunidadSector: 'Los Naranjos',
+        calleDireccion: '',
+        habitabilidad: 'INHABITABLE',
+        installationId: 'inst_002',
+      );
+
+      final json = reporteInundacion.toJson();
+      expect(json['evento']['tipo'], 'INUNDACION');
+      expect(json['evento']['codigo_evento'], 'INUNDACION_CHIRIQUI_2026');
+      expect(json['evento']['metadatos_evento']['nivel_agua_cm'], 120);
+      expect(json['evento']['metadatos_evento']['rio_desbordado'], 'Río Caldera');
+
+      final reconstructed = DisasterReport.fromJson(json);
+      expect(reconstructed.tipoEvento, 'INUNDACION');
+      expect(reconstructed.metadatosEvento['nivel_agua_cm'], 120);
+    });
   });
 }

@@ -173,6 +173,17 @@ def lambda_handler(event: dict, context) -> dict:
         report_id = payload.get("report_id") or f"rep_{uuid.uuid4().hex}"
         timestamp = payload.get("timestamp") or datetime.now(timezone.utc).isoformat()
 
+        # Parsear evento extensible y evidencias fotográficas
+        evento_data = payload.get("evento", {})
+        tipo_evento = evento_data.get("tipo", payload.get("tipo_evento", "TERREMOTO"))
+        codigo_evento = evento_data.get("codigo_evento", payload.get("codigo_evento", "TERREMOTO_LOS_SANTOS_2026"))
+        metadatos_evento = evento_data.get("metadatos_evento", payload.get("metadatos_evento", {}))
+
+        evidencias_data = payload.get("evidencias_fotograficas", [])
+        fotos_urls = payload.get("fotos_urls", [])
+        if not fotos_urls and evidencias_data:
+            fotos_urls = [ev.get("url") or ev.get("ruta_local") for ev in evidencias_data if ev.get("url") or ev.get("ruta_local")]
+
         assessment = DisasterAssessment(
             report_id=report_id,
             timestamp=timestamp,
@@ -186,7 +197,11 @@ def lambda_handler(event: dict, context) -> dict:
             censo_demografico=censo,
             necesidades_humanitarias=necesidades,
             auditoria_kyc=auditoria_kyc,
-            fotos_urls=payload.get("fotos_urls", []),
+            tipo_evento=tipo_evento,
+            codigo_evento=codigo_evento,
+            metadatos_evento=metadatos_evento,
+            evidencias_fotograficas=evidencias_data,
+            fotos_urls=fotos_urls,
         )
 
         # 1. Guardar reporte completo en DynamoDB

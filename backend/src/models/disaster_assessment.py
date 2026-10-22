@@ -162,6 +162,22 @@ class AuditoriaDeviceKYC:
     timestamp_recepcion_aws: Optional[str] = None
 
 
+class TipoEventoDesastre(str, Enum):
+    TERREMOTO = "TERREMOTO"
+    INUNDACION = "INUNDACION"
+    DESLIZAMIENTO = "DESLIZAMIENTO"
+    VENDAVAL_HURACAN = "VENDAVAL_HURACAN"
+    INCENDIO = "INCENDIO"
+    TSUNAMI = "TSUNAMI"
+    OTRO = "OTRO"
+
+
+class TipoEvidenciaFotografica(str, Enum):
+    IDENTIFICACION = "IDENTIFICACION"
+    ESTRUCTURA_DANO = "ESTRUCTURA_DANO"
+    OTRO = "OTRO"
+
+
 @dataclass
 class DisasterAssessment:
     report_id: str
@@ -176,6 +192,10 @@ class DisasterAssessment:
     censo_demografico: CensoDemografico
     necesidades_humanitarias: NecesidadesHumanitarias
     auditoria_kyc: AuditoriaDeviceKYC
+    tipo_evento: str = "TERREMOTO"
+    codigo_evento: str = "TERREMOTO_LOS_SANTOS_2026"
+    metadatos_evento: Dict[str, Any] = field(default_factory=dict)
+    evidencias_fotograficas: List[Dict[str, Any]] = field(default_factory=list)
     fotos_urls: List[str] = field(default_factory=list)
 
     @classmethod

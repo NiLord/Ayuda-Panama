@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../models/disaster_report.dart';
 import '../services/api_service.dart';
@@ -19,6 +21,15 @@ class ReportWizardScreen extends StatefulWidget {
 class _ReportWizardScreenState extends State<ReportWizardScreen> {
   int _currentStep = 0;
   bool _enviando = false;
+
+  // Multi-Evento Extensible
+  TipoEvento _tipoEvento = TipoEvento.terremoto;
+  String _codigoEvento = 'TERREMOTO_LOS_SANTOS_2026';
+
+  // Evidencias Fotográficas
+  final ImagePicker _picker = ImagePicker();
+  FotoEvidencia? _fotoIdentificacion; // Mínimo 1 obligatoria
+  final List<FotoEvidencia> _fotosEstructura = []; // Mínimo 2 obligatorias
 
   // Paso 1: Ubicación Nacional & Códigos Postales
   String _provincia = 'Los Santos';
@@ -92,6 +103,52 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
           if (_afectadoTelefonoCtrl.text.isEmpty) _afectadoTelefonoCtrl.text = profile.telefono;
         }
       });
+    }
+  }
+
+  Future<void> _capturarFotoIdentificacion(ImageSource source) async {
+    try {
+      final XFile? file = await _picker.pickImage(source: source, imageQuality: 85);
+      if (file != null) {
+        setState(() {
+          _fotoIdentificacion = FotoEvidencia(
+            id: 'id_${const Uuid().v4()}',
+            tipo: TipoFotoEvidencia.identificacion.value,
+            rutaLocal: file.path,
+            timestamp: DateTime.now().toUtc().toIso8601String(),
+            descripcion: 'Cédula o Documento de Identidad',
+          );
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al capturar foto de identificación: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _capturarFotoEstructura(ImageSource source) async {
+    try {
+      final XFile? file = await _picker.pickImage(source: source, imageQuality: 85);
+      if (file != null) {
+        setState(() {
+          _fotosEstructura.add(FotoEvidencia(
+            id: 'est_${const Uuid().v4()}',
+            tipo: TipoFotoEvidencia.estructuraDano.value,
+            rutaLocal: file.path,
+            timestamp: DateTime.now().toUtc().toIso8601String(),
+            descripcion: 'Foto #${_fotosEstructura.length + 1} daño estructural',
+          ));
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al capturar foto de la estructura: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -225,6 +282,30 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
       return;
     }
 
+    // 4. Validar Foto de Identificación (Mínimo 1 obligatoria)
+    if (_fotoIdentificacion == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debes adjuntar al menos 1 foto de la cédula o identificación del jefe/a de familia.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() => _currentStep = 3);
+      return;
+    }
+
+    // 5. Validar Fotos de la Estructura Afectada (Mínimo 2 obligatorias)
+    if (_fotosEstructura.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Debes adjuntar al menos 2 fotos de la estructura afectada (${_fotosEstructura.length}/2).'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() => _currentStep = 1);
+      return;
+    }
+
     if (!_consentimientoDado) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -258,10 +339,27 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
       final referenciaNormalizada = PanamaTextNormalizer.normalize(_referenciaCtrl.text);
       final descripcionDanoNormalizada = PanamaTextNormalizer.normalize(_descripcionDanoCtrl.text);
 
+      // Consolidar evidencias fotográficas estructuradas
+      final todasLasEvidencias = <FotoEvidencia>[];
+      if (_fotoIdentificacion != null) todasLasEvidencias.add(_fotoIdentificacion!);
+      todasLasEvidencias.addAll(_fotosEstructura);
+      final fotosUrls = todasLasEvidencias.map((e) => e.rutaLocal).toList();
+
       final report = DisasterReport(
         reportId: 'rep_${const Uuid().v4()}',
         timestamp: DateTime.now().toUtc().toIso8601String(),
         consentimientoInformado: _consentimientoDado,
+        tipoEvento: _tipoEvento.value,
+        codigoEvento: _codigoEvento,
+        metadatosEvento: {
+          'tipo_evento_label': _tipoEvento.label,
+          'sistema_constructivo': _sistemaConstructivo,
+          'tipo_inmueble': _tipoInmueble,
+          'fuga_gas': _fugaGas,
+          'riesgo_colapso': _riesgoColapso,
+        },
+        evidencias: todasLasEvidencias,
+        fotosUrls: fotosUrls,
         reporterId: profile.reporterId,
         rolInformante: profile.rol,
         informanteNombre: profile.nombre,
@@ -388,11 +486,31 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
               );
               return;
             }
+          } else if (_currentStep == 1) {
+            if (_fotosEstructura.length < 2) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Debes adjuntar al menos 2 fotos de la estructura afectada (${_fotosEstructura.length}/2).'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
           } else if (_currentStep == 2) {
             if (_totalOcupantes < 1) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('El censo debe incluir al menos 1 persona en el hogar según el desglose.'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+          } else if (_currentStep == 3) {
+            if (_fotoIdentificacion == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Debes adjuntar al menos 1 foto de la cédula o identificación del jefe/a de familia.'),
                   backgroundColor: Colors.red,
                 ),
               );
@@ -456,6 +574,46 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Selector de Tipo de Catástrofe / Multi-Evento Extensible
+                Card(
+                  elevation: 0,
+                  color: Colors.red.shade50,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: Colors.red.shade200),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: DropdownButtonFormField<TipoEvento>(
+                      isExpanded: true,
+                      value: _tipoEvento,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de Evento / Catástrofe',
+                        prefixIcon: Icon(Icons.crisis_alert, color: Colors.red),
+                        border: InputBorder.none,
+                      ),
+                      items: TipoEvento.values.map((ev) {
+                        return DropdownMenuItem(
+                          value: ev,
+                          child: Text(
+                            ev.label,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _tipoEvento = val;
+                            _codigoEvento = '${val.value}_PANAMA_2026';
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
                 // Banner de Estado GPS y Geocodificación
                 Card(
                   color: _autocompletadoOnline ? Colors.green.shade50 : Colors.amber.shade50,
@@ -671,6 +829,119 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // Sección de Fotos de la Estructura Afectada (Mínimo 2 requeridas)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _fotosEstructura.length >= 2 ? Colors.green.shade400 : Colors.red.shade300,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Fotos de la Estructura *',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _fotosEstructura.length >= 2 ? Colors.green.shade100 : Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${_fotosEstructura.length} de 2 mínimas',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: _fotosEstructura.length >= 2 ? Colors.green.shade800 : Colors.red.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Obligatorio: Adjunta al menos 2 fotos de la estructura (fachada, grietas, columnas o techo)',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _capturarFotoEstructura(ImageSource.camera),
+                              icon: const Icon(Icons.camera_alt),
+                              label: const Text('Cámara'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _capturarFotoEstructura(ImageSource.gallery),
+                              icon: const Icon(Icons.photo_library),
+                              label: const Text('Galería'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_fotosEstructura.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 95,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _fotosEstructura.length,
+                            itemBuilder: (ctx, idx) {
+                              final foto = _fotosEstructura[idx];
+                              return Stack(
+                                children: [
+                                  Container(
+                                    width: 95,
+                                    height: 95,
+                                    margin: const EdgeInsets.only(right: 8),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.grey.shade400),
+                                      image: DecorationImage(
+                                        image: FileImage(File(foto.rutaLocal)),
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 2,
+                                    right: 10,
+                                    child: GestureDetector(
+                                      onTap: () => setState(() => _fotosEstructura.removeAt(idx)),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(3),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -849,6 +1120,108 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                     helperText: 'Obligatorio para que los rescatistas coordinen auxilio',
                     prefixIcon: Icon(Icons.phone),
                     border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Sección Foto de Identificación (Mínimo 1 obligatoria)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _fotoIdentificacion != null ? Colors.green.shade400 : Colors.red.shade300,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Foto de la Cédula / Identificación *',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _fotoIdentificacion != null ? Colors.green.shade100 : Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _fotoIdentificacion != null ? '1 de 1 agregada' : 'Falta foto',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: _fotoIdentificacion != null ? Colors.green.shade800 : Colors.red.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Obligatorio: Fotografía legible de la cédula panameña o pasaporte del jefe/a de familia',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _capturarFotoIdentificacion(ImageSource.camera),
+                              icon: const Icon(Icons.camera_alt),
+                              label: const Text('Cámara'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _capturarFotoIdentificacion(ImageSource.gallery),
+                              icon: const Icon(Icons.photo_library),
+                              label: const Text('Galería'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_fotoIdentificacion != null) ...[
+                        const SizedBox(height: 12),
+                        Stack(
+                          alignment: Alignment.topRight,
+                          children: [
+                            Container(
+                              height: 140,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.green.shade400),
+                                image: DecorationImage(
+                                  image: FileImage(File(_fotoIdentificacion!.rutaLocal)),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: GestureDetector(
+                                onTap: () => setState(() => _fotoIdentificacion = null),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),

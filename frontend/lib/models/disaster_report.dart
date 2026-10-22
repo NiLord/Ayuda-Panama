@@ -80,11 +80,82 @@ extension RolInformanteExt on RolInformante {
   }
 }
 
+/// Tipos de Eventos / Catástrofes (Arquitectura Multi-Evento Extensible)
+enum TipoEvento {
+  terremoto('TERREMOTO', 'Terremoto / Sismo'),
+  inundacion('INUNDACION', 'Inundación / Crecida'),
+  deslizamiento('DESLIZAMIENTO', 'Deslizamiento / Derrumbe'),
+  vendavalHuracan('VENDAVAL_HURACAN', 'Vendaval / Huracán'),
+  incendio('INCENDIO', 'Incendio Estructural / Forestal'),
+  otro('OTRO', 'Otro Evento');
+
+  final String value;
+  final String label;
+  const TipoEvento(this.value, this.label);
+}
+
+/// Clasificación de Evidencia Fotográfica
+enum TipoFotoEvidencia {
+  identificacion('IDENTIFICACION', 'Documento de Identidad'),
+  estructuraDano('ESTRUCTURA_DANO', 'Estructura / Daño Visible'),
+  otro('OTRO', 'Otra Evidencia');
+
+  final String value;
+  final String label;
+  const TipoFotoEvidencia(this.value, this.label);
+}
+
+/// Evidencia Fotográfica con Metadata y Clasificación
+class FotoEvidencia {
+  final String id;
+  final String tipo; // IDENTIFICACION, ESTRUCTURA_DANO, OTRO
+  final String rutaLocal;
+  final String? urlRemota;
+  final String timestamp;
+  final String? descripcion;
+
+  FotoEvidencia({
+    required this.id,
+    required this.tipo,
+    required this.rutaLocal,
+    this.urlRemota,
+    required this.timestamp,
+    this.descripcion,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'tipo': tipo,
+      'ruta_local': rutaLocal,
+      'url_remota': urlRemota,
+      'timestamp': timestamp,
+      if (descripcion != null) 'descripcion': descripcion,
+    };
+  }
+
+  factory FotoEvidencia.fromJson(Map<String, dynamic> json) {
+    return FotoEvidencia(
+      id: json['id'] ?? '',
+      tipo: json['tipo'] ?? 'OTRO',
+      rutaLocal: json['ruta_local'] ?? '',
+      urlRemota: json['url_remota'],
+      timestamp: json['timestamp'] ?? DateTime.now().toIso8601String(),
+      descripcion: json['descripcion'],
+    );
+  }
+}
+
 /// Modelo Canónico de Reporte de Emergencia
 class DisasterReport {
   final String reportId;
   final String timestamp;
   final bool consentimientoInformado;
+
+  // Multi-Evento Extensible
+  final String tipoEvento;
+  final String codigoEvento;
+  final Map<String, dynamic> metadatosEvento;
 
   // Informante
   final String reporterId;
@@ -160,12 +231,16 @@ class DisasterReport {
   final String sistemaOperativo;
   final int? nivelBateria;
   final String tipoConexion;
+  final List<FotoEvidencia> evidencias;
   final List<String> fotosUrls;
 
   DisasterReport({
     required this.reportId,
     required this.timestamp,
     required this.consentimientoInformado,
+    this.tipoEvento = 'TERREMOTO',
+    this.codigoEvento = 'TERREMOTO_LOS_SANTOS_2026',
+    this.metadatosEvento = const {},
     required this.reporterId,
     required this.rolInformante,
     this.informanteNombre,
@@ -225,6 +300,7 @@ class DisasterReport {
     this.sistemaOperativo = 'Desconocido',
     this.nivelBateria,
     this.tipoConexion = 'CELULAR',
+    this.evidencias = const [],
     this.fotosUrls = const [],
   });
 
@@ -233,6 +309,12 @@ class DisasterReport {
       'report_id': reportId,
       'timestamp': timestamp,
       'consentimiento_informado': consentimientoInformado,
+      'evento': {
+        'tipo': tipoEvento,
+        'codigo_evento': codigoEvento,
+        'metadatos_evento': metadatosEvento,
+      },
+      'evidencias_fotograficas': evidencias.map((e) => e.toJson()).toList(),
       'informante': {
         'reporter_id': reporterId,
         'rol': rolInformante,
@@ -316,6 +398,7 @@ class DisasterReport {
   }
 
   factory DisasterReport.fromJson(Map<String, dynamic> json) {
+    final evt = json['evento'] as Map<String, dynamic>? ?? {};
     final inf = json['informante'] as Map<String, dynamic>? ?? {};
     final tit = json['titular_afectado'] as Map<String, dynamic>? ?? {};
     final ubi = json['ubicacion'] as Map<String, dynamic>? ?? {};
@@ -330,6 +413,13 @@ class DisasterReport {
       reportId: json['report_id'] ?? '',
       timestamp: json['timestamp'] ?? '',
       consentimientoInformado: json['consentimiento_informado'] ?? true,
+      tipoEvento: evt['tipo'] ?? json['tipo_evento'] ?? 'TERREMOTO',
+      codigoEvento: evt['codigo_evento'] ?? json['codigo_evento'] ?? 'TERREMOTO_LOS_SANTOS_2026',
+      metadatosEvento: evt['metadatos_evento'] as Map<String, dynamic>? ?? {},
+      evidencias: (json['evidencias_fotograficas'] as List<dynamic>?)
+              ?.map((e) => FotoEvidencia.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
       reporterId: inf['reporter_id'] ?? '',
       rolInformante: inf['rol'] ?? 'AFECTADO_DIRECTO',
       informanteNombre: inf['nombre_completo'],
