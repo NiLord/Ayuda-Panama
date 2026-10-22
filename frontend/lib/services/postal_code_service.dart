@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 import '../utils/panama_text_normalizer.dart';
 
 class PostalLocationResult {
@@ -34,7 +35,7 @@ class PostalLocationResult {
 }
 
 class PostalCodeService {
-  static const String _baseUrl = 'https://codigospostalespanama.gob.pa/api/location';
+  static String get _baseUrl => AppConfig.postalCodeServiceUrl;
 
   /// Realiza la consulta de geocodificación inversa oficial a la API de Códigos Postales de Panamá.
   /// Retorna null si no hay conexión o si la consulta falla, permitiendo el fallback offline inmediato.

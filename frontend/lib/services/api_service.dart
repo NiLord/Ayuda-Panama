@@ -1,14 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 import '../models/disaster_report.dart';
 
 class ApiService {
-  // Constantes inyectadas en tiempo de compilación mediante --dart-define
-  // Permite despliegue seguro sin almacenar secretos en archivos de texto plano
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://lse-api-placeholder.execute-api.us-east-1.amazonaws.com',
-  );
+  /// URL base dinámica resuelta desde AppConfig (centralizada en AWS SSM)
+  static String get baseUrl => AppConfig.apiBaseUrl;
 
   static const String apiKey = String.fromEnvironment(
     'API_KEY',

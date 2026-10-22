@@ -1,0 +1,39 @@
+{
+  "environment": "prod",
+  "apiBaseUrl": "https://ayudapanama-api.fernandogonzalez.dev",
+  "postalCodeServiceUrl": "https://codigospostalespanama.gob.pa/api/location",
+  "defaultEventCode": "SISMO_OCTUBRE_2026",
+  "events": [
+    {
+      "codigo": "SISMO_OCTUBRE_2026",
+      "nombre": "Sismo Octubre 2026",
+      "tipo": "TERREMOTO",
+      "descripcion": "Evaluación rápida de daños y necesidades por sismo regional en Panamá.",
+      "activo": true
+    },
+    {
+      "codigo": "INUNDACION_TEMPORAL_2026",
+      "nombre": "Inundaciones y Desbordamientos 2026",
+      "tipo": "INUNDACION",
+      "descripcion": "Reporte de afectaciones por lluvias torrenciales e inundaciones.",
+      "activo": false
+    },
+    {
+      "codigo": "DESLIZAMIENTO_TIERRA_2026",
+      "nombre": "Deslizamientos y Vías Bloqueadas 2026",
+      "tipo": "DESLIZAMIENTO",
+      "descripcion": "Reportes de deslaves y bloqueos de infraestructura vial o residencial.",
+      "activo": false
+    }
+  ],
+  "emergencyContacts": {
+    "sinaproc": "*335",
+    "cruzRoja": "119",
+    "policia": "104",
+    "bomberos": "103"
+  },
+  "rules": {
+    "requireIdPhoto": true,
+    "minDamagePhotos": 2
+  }
+}

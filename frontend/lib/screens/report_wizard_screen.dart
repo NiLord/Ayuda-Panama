@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import '../config/app_config.dart';
 import '../models/disaster_report.dart';
 import '../services/api_service.dart';
 import '../services/offline_queue_service.dart';
@@ -23,10 +24,10 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   int _currentStep = 0;
   bool _enviando = false;
 
-  // Multi-Evento Extensible (Configurado por defecto a "Sismo Octubre 2026")
-  final String _tipoEvento = 'TERREMOTO';
-  final String _codigoEvento = 'SISMO_OCTUBRE_2026';
-  final String _nombreEvento = 'Sismo Octubre 2026';
+  // Evento activo dinámico resuelto desde AppConfig (vector de eventos en AWS SSM)
+  String get _tipoEvento => AppConfig.defaultEvent.tipo;
+  String get _codigoEvento => AppConfig.defaultEvent.codigo;
+  String get _nombreEvento => AppConfig.defaultEvent.nombre;
 
   // Evidencias Fotográficas
   final ImagePicker _picker = ImagePicker();

@@ -296,6 +296,55 @@ Resources:
       Value: !Ref AppApiKey
       Description: Identificador API Key para la app móvil Ayuda Panamá.
 
+  # Configuración global centralizada de la aplicación (AppConfig) en AWS SSM
+  AppConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /ayuda-panama/${Environment}/app-config
+      Type: String
+      Description: Configuración dinámica de la aplicación móvil Ayuda Panamá (vector de eventos y endpoints)
+      Value: !Sub |
+        {
+          "environment": "${Environment}",
+          "apiBaseUrl": "https://ayudapanama-api.fernandogonzalez.dev",
+          "httpApiRawEndpoint": "${HttpApi.ApiEndpoint}",
+          "postalCodeServiceUrl": "https://codigospostalespanama.gob.pa/api/location",
+          "defaultEventCode": "SISMO_OCTUBRE_2026",
+          "events": [
+            {
+              "codigo": "SISMO_OCTUBRE_2026",
+              "nombre": "Sismo Octubre 2026",
+              "tipo": "TERREMOTO",
+              "descripcion": "Evaluación rápida de daños y necesidades por sismo regional en Panamá.",
+              "activo": true
+            },
+            {
+              "codigo": "INUNDACION_TEMPORAL_2026",
+              "nombre": "Inundaciones y Desbordamientos 2026",
+              "tipo": "INUNDACION",
+              "descripcion": "Reporte de afectaciones por lluvias torrenciales e inundaciones.",
+              "activo": false
+            },
+            {
+              "codigo": "DESLIZAMIENTO_TIERRA_2026",
+              "nombre": "Deslizamientos y Vías Bloqueadas 2026",
+              "tipo": "DESLIZAMIENTO",
+              "descripcion": "Reportes de deslaves y bloqueos de infraestructura vial o residencial.",
+              "activo": false
+            }
+          ],
+          "emergencyContacts": {
+            "sinaproc": "*335",
+            "cruzRoja": "119",
+            "policia": "104",
+            "bomberos": "103"
+          },
+          "rules": {
+            "requireIdPhoto": true,
+            "minDamagePhotos": 2
+          }
+        }
+
   # ============================================================================
   # INTEGRACIONES Y RUTAS DE API GATEWAY
   # ============================================================================
@@ -425,3 +474,7 @@ Outputs:
   AppApiKeySsmParam:
     Description: Parámetro SSM donde se encuentra registrado el API Key
     Value: !Ref AppApiKeyParam
+
+  AppConfigSsmParam:
+    Description: Parámetro SSM con la configuración completa (AppConfig) de la app
+    Value: !Ref AppConfigParam

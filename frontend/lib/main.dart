@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'config/app_config.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_profile_screen.dart';
 import 'services/panama_dpa_service.dart';
@@ -6,6 +7,7 @@ import 'services/reporter_profile_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppConfig.init();
   await PanamaDpaService.init();
   final isConfigured = await ReporterProfileService.isProfileConfigured();
 
