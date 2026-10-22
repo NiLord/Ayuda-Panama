@@ -69,6 +69,15 @@ Resources:
                   - iam:TagRole
                   - iam:UntagRole
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:DescribeRule
+                  - events:DeleteRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                  - events:ListTargetsByRule
+                Resource: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/lse-*'
 
 Outputs:
   RoleArn:
