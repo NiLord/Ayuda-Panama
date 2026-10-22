@@ -236,7 +236,7 @@ class ApiService {
         '/api/v1/reports/check-duplicate',
         headers: _authHeaders,
         body: jsonEncode({'cedula': cedula}),
-        timeout: const Duration(seconds: 12),
+        timeout: const Duration(seconds: 22),
       );
 
       if (response.statusCode == 200) {
@@ -244,27 +244,33 @@ class ApiService {
         return DuplicateCheckResult.fromJson(data);
       } else {
         final data = jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
+        final isTimeout = response.statusCode == 504 || response.statusCode == 408;
         return DuplicateCheckResult(
           success: false,
           existeDuplicado: false,
+          esTimeout: isTimeout,
           cedula: cedula,
           cedulaCensurada: '',
           sistemas: [],
           detalles: [],
           mensaje: data['mensaje'] as String? ?? 'Error verificando cédula',
-          error: data['error'] as String?,
+          error: data['error'] as String? ?? (isTimeout ? 'TIMEOUT' : 'HTTP_${response.statusCode}'),
         );
       }
     } catch (e) {
+      final isTimeout = e.toString().toLowerCase().contains('timeout');
       return DuplicateCheckResult(
         success: false,
         existeDuplicado: false,
+        esTimeout: isTimeout,
         cedula: cedula,
         cedulaCensurada: '',
         sistemas: [],
         detalles: [],
-        mensaje: 'No fue posible validar la cédula por problemas de conexión.',
-        error: e.toString(),
+        mensaje: isTimeout
+            ? 'Tiempo de espera agotado al consultar los servicios del Estado. Por favor reintente.'
+            : 'No fue posible validar la cédula por problemas de conexión.',
+        error: isTimeout ? 'TIMEOUT' : e.toString(),
       );
     }
   }
@@ -279,16 +285,43 @@ class ApiService {
       final response = await _getWithFallback(
         '/api/v1/tramites/miviot?cedula=${Uri.encodeComponent(cedula)}$forceParam',
         headers: _authHeaders,
-        timeout: const Duration(seconds: 12),
+        timeout: const Duration(seconds: 20),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
         return MiviotTramiteResult.fromJson(data);
+      } else {
+        final isTimeout = response.statusCode == 504 || response.statusCode == 408;
+        return MiviotTramiteResult(
+          success: false,
+          encontrado: false,
+          esTimeout: isTimeout,
+          verificadoInexistente: false,
+          error: isTimeout ? 'TIMEOUT' : 'HTTP_${response.statusCode}',
+          puedeReintentar: true,
+          cedula: cedula,
+          cedulaCensurada: '',
+          mensaje: isTimeout
+              ? 'El portal de MIVIOT tardó demasiado en responder (Timeout).'
+              : 'Código de error ${response.statusCode} al consultar el portal de MIVIOT.',
+        );
       }
-      return null;
-    } catch (_) {
-      return null;
+    } catch (e) {
+      final isTimeout = e.toString().toLowerCase().contains('timeout');
+      return MiviotTramiteResult(
+        success: false,
+        encontrado: false,
+        esTimeout: isTimeout,
+        verificadoInexistente: false,
+        error: isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR',
+        puedeReintentar: true,
+        cedula: cedula,
+        cedulaCensurada: '',
+        mensaje: isTimeout
+            ? 'Tiempo de espera agotado al conectar con el portal externo de MIVIOT.'
+            : 'Error de red consultando el portal de MIVIOT: $e',
+      );
     }
   }
 }

@@ -85,6 +85,10 @@ def lambda_handler(event: dict, context) -> dict:
                 "success": True,
                 "origen": "CACHE",
                 "encontrado": cached_item.get("encontrado", False),
+                "verificado_inexistente": cached_item.get("verificado_inexistente", not cached_item.get("encontrado", False)),
+                "es_timeout": False,
+                "error": None,
+                "puede_reintentar": False,
                 "cedula": norm_cedula,
                 "cedula_censurada": mask_cedula(norm_cedula),
                 "reporte": cached_item.get("reporte"),
@@ -96,13 +100,36 @@ def lambda_handler(event: dict, context) -> dict:
             })
 
         # 2. Consulta en vivo al portal Odoo de MIVIOT
-        adapter = MiviotAdapter(timeout_seconds=10)
+        adapter = MiviotAdapter(timeout_seconds=15)
         resultado = adapter.consultar_cedula(norm_cedula)
 
-        # 3. Guardar en tabla MiviotTramitesTable
+        # Si ocurrió un error o timeout en la conexión externa:
+        # NUNCA persistir en DynamoDB como 'no encontrado' y advertir claramente el fallo
+        if resultado.error:
+            logger.warning("Fallo en consulta externa MIVIOT para %s: %s (timeout: %s)", norm_cedula, resultado.error, resultado.es_timeout)
+            return build_response(200, {
+                "success": False,
+                "origen": "MIVIOT_LIVE",
+                "encontrado": False,
+                "verificado_inexistente": False,
+                "es_timeout": resultado.es_timeout,
+                "error": resultado.error,
+                "puede_reintentar": True,
+                "cedula": norm_cedula,
+                "cedula_censurada": mask_cedula(norm_cedula),
+                "reporte": None,
+                "fecha_recibido": None,
+                "paso_actual": None,
+                "estado_actual": None,
+                "ultima_actualizacion": now.isoformat(),
+                "mensaje": resultado.mensaje or "El servicio de MIVIOT no respondió a tiempo",
+            })
+
+        # 3. Guardar en tabla MiviotTramitesTable SOLO si la consulta fue exitosa o confirmada inexistente
         item_to_save = {
             "PK": f"CEDULA#{norm_cedula}",
             "encontrado": resultado.encontrado,
+            "verificado_inexistente": resultado.verificado_inexistente,
             "cedula": norm_cedula,
             "reporte": resultado.reporte,
             "fecha_recibido": resultado.fecha_recibido,
@@ -111,7 +138,7 @@ def lambda_handler(event: dict, context) -> dict:
             "ultima_actualizacion": now.isoformat(),
         }
 
-        # Si no fue encontrado, colocar TTL de 4 horas para reintentar más adelante
+        # Si fue verificado que no existe, colocar TTL de 4 horas para reintentar más adelante
         if not resultado.encontrado:
             item_to_save["ttl_expiration"] = int((now + timedelta(hours=4)).timestamp())
 
@@ -124,6 +151,10 @@ def lambda_handler(event: dict, context) -> dict:
             "success": True,
             "origen": "MIVIOT_LIVE",
             "encontrado": resultado.encontrado,
+            "verificado_inexistente": resultado.verificado_inexistente,
+            "es_timeout": False,
+            "error": None,
+            "puede_reintentar": False,
             "cedula": norm_cedula,
             "cedula_censurada": mask_cedula(norm_cedula),
             "reporte": resultado.reporte,

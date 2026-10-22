@@ -10,6 +10,8 @@ import http.cookiejar
 import json
 import logging
 import re
+import socket
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Dict, Any, Optional, Tuple
@@ -35,6 +37,8 @@ class MiviotConsultaResult:
     estado_actual: Optional[str] = None
     mensaje: Optional[str] = None
     error: Optional[str] = None
+    es_timeout: bool = False
+    verificado_inexistente: bool = False
     timestamp_consulta: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -114,12 +118,45 @@ class MiviotAdapter:
 
             return self.parse_response_html(html_phase2, cedula_norm)
 
+        except (TimeoutError, socket.timeout) as e:
+            logger.warning("Timeout al conectar con MIVIOT para cédula %s: %s", cedula_norm, str(e))
+            return MiviotConsultaResult(
+                encontrado=False,
+                cedula=cedula_norm,
+                error="TIMEOUT",
+                es_timeout=True,
+                verificado_inexistente=False,
+                mensaje="El portal externo de MIVIOT no respondió a tiempo (tiempo de espera agotado).",
+                timestamp_consulta=datetime.now(timezone.utc).isoformat(),
+            )
+        except urllib.error.URLError as e:
+            is_timeout = isinstance(getattr(e, "reason", None), socket.timeout) or "timed out" in str(e).lower()
+            err_type = "TIMEOUT" if is_timeout else "CONEXION_ERROR"
+            msg = (
+                "El portal externo de MIVIOT no respondió a tiempo (tiempo de espera agotado)."
+                if is_timeout
+                else f"Error de conexión con el portal de MIVIOT: {str(e)}"
+            )
+            logger.warning("Error de red consultando MIVIOT: %s", str(e))
+            return MiviotConsultaResult(
+                encontrado=False,
+                cedula=cedula_norm,
+                error=err_type,
+                es_timeout=is_timeout,
+                verificado_inexistente=False,
+                mensaje=msg,
+                timestamp_consulta=datetime.now(timezone.utc).isoformat(),
+            )
         except Exception as e:
+            is_timeout = "timeout" in str(e).lower() or "timed out" in str(e).lower()
+            err_type = "TIMEOUT" if is_timeout else "CONEXION_ERROR"
             logger.exception("Error al conectar con el servidor de MIVIOT: %s", str(e))
             return MiviotConsultaResult(
                 encontrado=False,
                 cedula=cedula_norm,
-                error="CONEXION_ERROR",
+                error=err_type,
+                es_timeout=is_timeout,
+                verificado_inexistente=False,
                 mensaje=f"Fallo en la comunicación con el portal de MIVIOT: {str(e)}",
                 timestamp_consulta=datetime.now(timezone.utc).isoformat(),
             )
@@ -143,10 +180,12 @@ class MiviotAdapter:
         """
         now_iso = datetime.now(timezone.utc).isoformat()
 
-        # Escenario B: Cédula sin registros
+        # Escenario B: Cédula sin registros confirmada por el portal
         if "alert-warning" in html or "No encontramos un reporte con esa cédula" in html:
             return MiviotConsultaResult(
                 encontrado=False,
+                verificado_inexistente=True,
+                es_timeout=False,
                 cedula=cedula,
                 mensaje="No encontramos un reporte con esa cédula en el MIVIOT.",
                 timestamp_consulta=now_iso,
@@ -156,6 +195,8 @@ class MiviotAdapter:
         if "alert-danger" in html or "Formato de cédula no válido" in html:
             return MiviotConsultaResult(
                 encontrado=False,
+                verificado_inexistente=False,
+                es_timeout=False,
                 cedula=cedula,
                 error="FORMATO_INVALIDO",
                 mensaje="El formato de cédula no es reconocido por el sistema del MIVIOT.",

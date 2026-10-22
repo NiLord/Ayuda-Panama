@@ -155,12 +155,23 @@ def lambda_handler(event: dict, context) -> dict:
                     "paso_actual": int(paso_val) if str(paso_val).isdigit() else 1,
                     "estado_actual": cached_item.get("estado_actual"),
                     "encontrado": True,
+                    "verificado_inexistente": False,
+                    "es_timeout": False,
+                    "error": None,
                 }
                 if "MIVIOT" not in sistemas_encontrados:
                     sistemas_encontrados.append("MIVIOT")
-            elif not cached_item:
-                # Si no está en caché de DynamoDB, ejecutar consulta al MIVIOT
-                adapter = MiviotAdapter(timeout_seconds=8)
+            elif cached_item and cached_item.get("verificado_inexistente"):
+                tramite_miviot = {
+                    "encontrado": False,
+                    "verificado_inexistente": True,
+                    "es_timeout": False,
+                    "error": None,
+                    "mensaje": "El MIVIOT certificó que no hay expediente para esta cédula.",
+                }
+            else:
+                # Si no está en caché o la entrada previa no era concluyente, consultar MIVIOT
+                adapter = MiviotAdapter(timeout_seconds=12)
                 res_miviot = adapter.consultar_cedula(norm_cedula)
                 if res_miviot.encontrado:
                     tramite_miviot = {
@@ -169,6 +180,9 @@ def lambda_handler(event: dict, context) -> dict:
                         "paso_actual": res_miviot.paso_actual,
                         "estado_actual": res_miviot.estado_actual,
                         "encontrado": True,
+                        "verificado_inexistente": False,
+                        "es_timeout": False,
+                        "error": None,
                     }
                     if "MIVIOT" not in sistemas_encontrados:
                         sistemas_encontrados.append("MIVIOT")
@@ -176,17 +190,53 @@ def lambda_handler(event: dict, context) -> dict:
                     miviot_table.put_item(Item={
                         "PK": f"CEDULA#{norm_cedula}",
                         "encontrado": True,
+                        "verificado_inexistente": False,
                         "reporte": res_miviot.reporte,
                         "fecha_recibido": res_miviot.fecha_recibido,
                         "paso_actual": res_miviot.paso_actual,
                         "estado_actual": res_miviot.estado_actual,
                         "ultima_actualizacion": datetime.now(timezone.utc).isoformat(),
                     })
+                elif res_miviot.error:
+                    # Ocurrió error o timeout: NO guardar como 'inexistente'
+                    tramite_miviot = {
+                        "encontrado": False,
+                        "verificado_inexistente": False,
+                        "es_timeout": res_miviot.es_timeout,
+                        "error": res_miviot.error,
+                        "puede_reintentar": True,
+                        "mensaje": res_miviot.mensaje,
+                    }
+                else:
+                    # Portal confirmó literalmente que NO existe registro
+                    tramite_miviot = {
+                        "encontrado": False,
+                        "verificado_inexistente": True,
+                        "es_timeout": False,
+                        "error": None,
+                        "puede_reintentar": False,
+                        "mensaje": res_miviot.mensaje or "Sin expediente registrado en MIVIOT",
+                    }
+                    miviot_table.put_item(Item={
+                        "PK": f"CEDULA#{norm_cedula}",
+                        "encontrado": False,
+                        "verificado_inexistente": True,
+                        "ultima_actualizacion": datetime.now(timezone.utc).isoformat(),
+                        "ttl_expiration": int((datetime.now(timezone.utc) + timedelta(hours=4)).timestamp()),
+                    })
         except Exception as e:
             logger.warning("Error consultando trámite en MIVIOT: %s", str(e))
+            tramite_miviot = {
+                "encontrado": False,
+                "verificado_inexistente": False,
+                "es_timeout": "timeout" in str(e).lower(),
+                "error": "EXCEPTION",
+                "puede_reintentar": True,
+                "mensaje": f"No se pudo consultar MIVIOT: {str(e)}",
+            }
 
-        # Si tiene trámite en MIVIOT, también se considera vivienda ya registrada oficialmente
-        if tramite_miviot:
+        # Si tiene trámite confirmado en MIVIOT, se considera vivienda ya registrada oficialmente
+        if tramite_miviot and tramite_miviot.get("encontrado"):
             existe_duplicado = True
             detalles_reportes.append({
                 "fuente": "MIVIOT",

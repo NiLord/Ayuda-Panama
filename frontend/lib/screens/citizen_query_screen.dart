@@ -17,6 +17,7 @@ class CitizenQueryScreen extends StatefulWidget {
 class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
   final TextEditingController _cedulaController = TextEditingController();
   bool _consultando = false;
+  bool _reintentandoMiviot = false;
   DuplicateCheckResult? _checkResult;
   MiviotTramiteResult? _miviotResult;
   bool _yaConsulto = false;
@@ -81,8 +82,32 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
           estadoActual: dupRes.tramiteMiviot!['estado_actual'] as String?,
           mensaje: 'Trámite oficial recuperado',
         );
+      } else if (dupRes.tramiteMiviot != null && dupRes.tramiteMiviot!['es_timeout'] == true) {
+        mivRes = MiviotTramiteResult(
+          success: false,
+          encontrado: false,
+          esTimeout: true,
+          verificadoInexistente: false,
+          error: 'TIMEOUT',
+          puedeReintentar: true,
+          cedula: cedula,
+          cedulaCensurada: dupRes.cedulaCensurada,
+          mensaje: dupRes.tramiteMiviot!['mensaje'] as String? ?? 'Tiempo de espera agotado al consultar MIVIOT.',
+        );
+      } else if (dupRes.tramiteMiviot != null && dupRes.tramiteMiviot!['verificado_inexistente'] == true) {
+        mivRes = MiviotTramiteResult(
+          success: true,
+          encontrado: false,
+          esTimeout: false,
+          verificadoInexistente: true,
+          error: null,
+          puedeReintentar: false,
+          cedula: cedula,
+          cedulaCensurada: dupRes.cedulaCensurada,
+          mensaje: dupRes.tramiteMiviot!['mensaje'] as String? ?? 'Sin expediente en MIVIOT.',
+        );
       } else {
-        // Consultar MIVIOT directamente como respaldo
+        // Consultar MIVIOT directamente como respaldo con reintentos
         mivRes = await DuplicateCheckService.consultarTramiteMiviot(cedula, force: force);
       }
 
@@ -102,6 +127,43 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
             backgroundColor: Colors.red,
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _reintentarSoloMiviot() async {
+    final cedula = _cedulaController.text.trim();
+    if (cedula.isEmpty) return;
+
+    setState(() => _reintentandoMiviot = true);
+
+    try {
+      final res = await DuplicateCheckService.consultarTramiteMiviot(cedula, force: true);
+      if (mounted) {
+        setState(() {
+          _miviotResult = res;
+          _reintentandoMiviot = false;
+        });
+
+        if (res != null && res.encontrado) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('¡Expediente ${res.reporte} localizado en MIVIOT!'),
+              backgroundColor: const Color(0xFF1B5E20),
+            ),
+          );
+        } else if (res != null && res.tieneError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(res.mensaje),
+              backgroundColor: Colors.orange.shade800,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _reintentandoMiviot = false);
       }
     }
   }
@@ -286,24 +348,44 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
   Widget _buildResultadoConsolidado() {
     final result = _checkResult;
     if (result == null || !result.success) {
+      final esTimeoutGlobal = result?.esTimeout == true;
       return Card(
         color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: esTimeoutGlobal ? Colors.amber.shade400 : Colors.red.shade200),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Icon(Icons.error_outline_rounded, size: 48, color: Colors.red.shade700),
+              Icon(
+                esTimeoutGlobal ? Icons.timer_off_outlined : Icons.error_outline_rounded,
+                size: 48,
+                color: esTimeoutGlobal ? Colors.amber.shade800 : Colors.red.shade700,
+              ),
               const SizedBox(height: 12),
-              const Text(
-                'No fue posible consultar el expediente',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              Text(
+                esTimeoutGlobal
+                    ? 'Tiempo de espera agotado al consultar'
+                    : 'No fue posible consultar el expediente',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
               Text(
                 result?.mensaje ?? 'Error de conexión con los servicios de consulta.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, color: Colors.black54),
+                style: const TextStyle(fontSize: 13, color: Colors.black87),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _consultando ? null : () => _ejecutarConsulta(force: true),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Reintentar Consulta Ahora'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1B5E20),
+                  foregroundColor: Colors.white,
+                ),
               ),
             ],
           ),
@@ -319,9 +401,79 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
     final tieneSinaproc = sinaprocDetalle.isNotEmpty;
     final tieneMiviot = _miviotResult != null && _miviotResult!.encontrado;
     final tieneApp = result.detalles.any((d) => d['fuente'] == 'APP');
+    final miviotDioTimeout = (_miviotResult != null && _miviotResult!.esTimeout) || result.esTimeout;
+    final miviotDioError = _miviotResult != null && _miviotResult!.tieneError;
 
     // Caso: No se encontró en ninguna fuente
     if (!tieneSinaproc && !tieneMiviot && !tieneApp) {
+      if (miviotDioTimeout || miviotDioError) {
+        return Card(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.amber.shade400, width: 1.5),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.timer_off_outlined, size: 48, color: Colors.amber.shade800),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'El portal de MIVIOT tardó en responder',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'La consulta para la cédula ${result.cedula} no pudo completarse debido a que el portal externo del MIVIOT excedió el tiempo límite de espera.\n\n⚠️ Esto NO significa que su expediente no exista. Por favor presione el botón de abajo para reintentar la consulta.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade800, height: 1.4),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _consultando ? null : () => _ejecutarConsulta(force: true),
+                    icon: _consultando
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.refresh_rounded),
+                    label: Text(_consultando ? 'Reintentando...' : 'Reintentar Consulta de MIVIOT'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1B5E20),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ReportWizardScreen()),
+                    );
+                  },
+                  icon: const Icon(Icons.add_location_alt, size: 18),
+                  label: const Text('Crear Reporte de Emergencia'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // SOLO si ambas entidades confirmaron de forma concluyente que NO existe:
       return Card(
         color: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -329,7 +481,7 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              Icon(Icons.search_off_rounded, size: 54, color: Colors.amber.shade800),
+              Icon(Icons.search_off_rounded, size: 54, color: Colors.blueGrey.shade600),
               const SizedBox(height: 14),
               Text(
                 'Sin registros para ${result.cedula}',
@@ -337,7 +489,7 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'No se encontró ninguna evaluación de daños en SINAPROC ni expediente habitacional en MIVIOT para esta cédula.',
+                'Los sistemas oficiales de SINAPROC y MIVIOT certificaron que no existe una evaluación de daños ni expediente habitacional registrado para esta cédula.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
               ),
@@ -558,6 +710,60 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
                   ),
                   const SizedBox(height: 10),
                   _buildStepperMiviot(_miviotResult!.pasoActual ?? 1),
+                ] else if (_miviotResult != null && _miviotResult!.tieneError) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.timer_off_outlined, color: Colors.amber.shade900, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _miviotResult!.esTimeout
+                                    ? 'Consulta externa MIVIOT en espera (Timeout)'
+                                    : 'Fallo al conectar con MIVIOT',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Colors.amber.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'El portal externo de MIVIOT tardó demasiado en responder. No se ha confirmado la inexistencia de su trámite.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _reintentandoMiviot ? null : _reintentarSoloMiviot,
+                            icon: _reintentandoMiviot
+                                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.refresh, size: 16),
+                            label: Text(_reintentandoMiviot ? 'Reintentando...' : 'Reintentar consulta de MIVIOT'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.amber.shade800,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ] else ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
@@ -565,8 +771,8 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Aún no se registra un expediente formal en el portal del MIVIOT.',
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                          'El MIVIOT certifica que no registra expediente formal para esta cédula.',
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
                         ),
                         const SizedBox(height: 8),
                         Text(

@@ -2,6 +2,10 @@
 class MiviotTramiteResult {
   final bool success;
   final bool encontrado;
+  final bool esTimeout;
+  final bool verificadoInexistente;
+  final String? error;
+  final bool puedeReintentar;
   final String origen;
   final String cedula;
   final String cedulaCensurada;
@@ -15,6 +19,10 @@ class MiviotTramiteResult {
   const MiviotTramiteResult({
     required this.success,
     required this.encontrado,
+    this.esTimeout = false,
+    this.verificadoInexistente = false,
+    this.error,
+    this.puedeReintentar = false,
     this.origen = 'MIVIOT',
     required this.cedula,
     required this.cedulaCensurada,
@@ -26,10 +34,21 @@ class MiviotTramiteResult {
     required this.mensaje,
   });
 
+  bool get tieneError => esTimeout || (error != null && error!.isNotEmpty);
+
   factory MiviotTramiteResult.fromJson(Map<String, dynamic> json) {
+    final esTimeout = json['es_timeout'] as bool? ?? false;
+    final errorStr = json['error'] as String?;
+    final encontrado = json['encontrado'] as bool? ?? false;
+    final verificado = json['verificado_inexistente'] as bool? ?? (!encontrado && errorStr == null && !esTimeout);
+
     return MiviotTramiteResult(
       success: json['success'] as bool? ?? false,
-      encontrado: json['encontrado'] as bool? ?? false,
+      encontrado: encontrado,
+      esTimeout: esTimeout,
+      verificadoInexistente: verificado,
+      error: errorStr,
+      puedeReintentar: (json['puede_reintentar'] as bool?) ?? (esTimeout || errorStr != null),
       origen: json['origen'] as String? ?? 'MIVIOT',
       cedula: json['cedula'] as String? ?? '',
       cedulaCensurada: json['cedula_censurada'] as String? ?? '',
