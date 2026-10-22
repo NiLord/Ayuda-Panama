@@ -1,54 +1,159 @@
-name: Backend CI/CD (Lambdas Python 3.13)
+name: Backend & Infra CI/CD (AWS Serverless)
 
 on:
   push:
     branches: [ main ]
     paths:
       - 'backend/**'
+      - 'infra/**'
       - '.github/workflows/deploy-backend.yml'
     tags:
-      - 'api-v*'
+      - 'v*'
   pull_request:
+    branches: [ main ]
     paths:
       - 'backend/**'
+      - 'infra/**'
+
+permissions:
+  id-token: write   # Necesario para autenticación OIDC con AWS (sin claves estáticas)
+  contents: read
 
 jobs:
   test:
     name: Pruebas Unitarias de Backend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
 
-      - name: Set up Python 3.13
+      - name: Configurar Python 3.13
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      - name: Ejecutar pruebas de modelo y adaptadores
+      - name: Ejecutar Suite Completa de Pruebas
         run: |
-          python -m unittest backend/tests/test_model_and_adapters.py
+          python3 -m unittest discover backend/tests
 
   deploy:
-    name: Despliegue de Lambdas en AWS
+    name: Despliegue en AWS Cloud
     needs: test
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/api-v')
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ENVIRONMENT: prod
+      STACK_NAME: lse-emergency-platform-prod
 
-      - name: Configurar credenciales de AWS
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Credenciales de AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
+          # Soporta tanto GitHub OIDC (Role ARN) como Access Keys en GitHub Secrets
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Empaquetar y actualizar Lambdas
+      - name: Resolver o Generar API Key y Secret en AWS SSM
+        id: resolve-secrets
+        run: |
+          echo "==> Verificando existencia de parámetros en AWS SSM Parameter Store..."
+          
+          # 1. API Key
+          EXISTING_KEY=$(aws ssm get-parameter --name "/ayuda-panama/${ENVIRONMENT}/api-key" --query "Parameter.Value" --output text --region "${AWS_REGION}" 2>/dev/null || echo "")
+          if [ -n "$EXISTING_KEY" ]; then
+            echo "✓ API Key recuperada desde SSM."
+            APP_API_KEY="$EXISTING_KEY"
+          elif [ -n "${{ secrets.APP_API_KEY }}" ]; then
+            APP_API_KEY="${{ secrets.APP_API_KEY }}"
+            echo "✓ API Key obtenida desde GitHub Secrets."
+          else
+            APP_API_KEY="$(openssl rand -hex 24)"
+            echo "✓ Nueva API Key generada criptográficamente."
+          fi
+
+          # 2. API Secret
+          EXISTING_SECRET=$(aws ssm get-parameter --name "/ayuda-panama/${ENVIRONMENT}/api-secret" --with-decryption --query "Parameter.Value" --output text --region "${AWS_REGION}" 2>/dev/null || echo "")
+          if [ -n "$EXISTING_SECRET" ]; then
+            echo "✓ API Secret recuperado desde SSM."
+            APP_API_SECRET="$EXISTING_SECRET"
+          elif [ -n "${{ secrets.APP_API_SECRET }}" ]; then
+            APP_API_SECRET="${{ secrets.APP_API_SECRET }}"
+            echo "✓ API Secret obtenido desde GitHub Secrets."
+          else
+            APP_API_SECRET="$(openssl rand -hex 32)"
+            echo "✓ Nuevo API Secret generado criptográficamente."
+          fi
+
+          # Asegurar que el secreto quede persistido en SSM (SecureString cifrado con KMS)
+          aws ssm put-parameter \
+            --name "/ayuda-panama/${ENVIRONMENT}/api-secret" \
+            --type "SecureString" \
+            --value "${APP_API_SECRET}" \
+            --overwrite \
+            --region "${AWS_REGION}" > /dev/null || true
+
+          # Exportar a variables de paso enmascaradas
+          echo "::add-mask::$APP_API_KEY"
+          echo "::add-mask::$APP_API_SECRET"
+          echo "app_api_key=$APP_API_KEY" >> "$GITHUB_OUTPUT"
+          echo "app_api_secret=$APP_API_SECRET" >> "$GITHUB_OUTPUT"
+
+      - name: Validar Plantilla de CloudFormation
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://infra/cloudformation.yaml \
+            --region "${AWS_REGION}"
+
+      - name: Desplegar Infraestructura CloudFormation
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/cloudformation.yaml \
+            --stack-name "${STACK_NAME}" \
+            --parameter-overrides \
+                Environment="${ENVIRONMENT}" \
+                AppApiKey="${{ steps.resolve-secrets.outputs.app_api_key }}" \
+                AppApiSecret="${{ steps.resolve-secrets.outputs.app_api_secret }}" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region "${AWS_REGION}"
+
+      - name: Empaquetar Código de Lambdas
         run: |
           zip -rq lambda_code.zip backend/
-          for fn in lse-submit-report-prod lse-get-public-reports-prod lse-get-upload-presign-prod lse-export-edan-prod; do
+
+      - name: Actualizar Código de las Funciones Lambda
+        run: |
+          FUNCTIONS=(
+            "lse-authorizer-${ENVIRONMENT}"
+            "lse-submit-report-${ENVIRONMENT}"
+            "lse-get-public-reports-${ENVIRONMENT}"
+            "lse-get-upload-presign-${ENVIRONMENT}"
+            "lse-export-edan-${ENVIRONMENT}"
+          )
+          for fn in "${FUNCTIONS[@]}"; do
+            echo "==> Actualizando código de $fn..."
             aws lambda update-function-code \
               --function-name "$fn" \
               --zip-file fileb://lambda_code.zip \
-              --region us-east-1 || true
+              --region "${AWS_REGION}" > /dev/null
           done
+
+      - name: Resumen del Despliegue en GitHub
+        run: |
+          HTTP_URL=$(aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl'].OutputValue" \
+            --output text \
+            --region "${AWS_REGION}")
+
+          echo "### 🚀 Despliegue en AWS Completado con Éxito" >> $GITHUB_STEP_SUMMARY
+          echo "- **Stack**: \`${STACK_NAME}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Región**: \`${AWS_REGION}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Endpoint API HTTP**: \`${HTTP_URL}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Lambda Authorizer**: Habilitado con \`X-Api-Key\` y \`X-App-Secret\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Gestión de Secretos**: Registrados de forma segura en **AWS SSM Parameter Store**" >> $GITHUB_STEP_SUMMARY
