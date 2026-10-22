@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ayuda_los_santos/models/duplicate_check_result.dart';
 import 'package:ayuda_los_santos/models/miviot_tramite_result.dart';
-import 'package:ayuda_los_santos/services/duplicate_check_service.dart';
 import 'package:ayuda_los_santos/widgets/miviot_tramite_dialog.dart';
 
 void main() {

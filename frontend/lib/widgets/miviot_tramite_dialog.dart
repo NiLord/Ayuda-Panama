@@ -61,7 +61,6 @@ class _MiviotTramiteDialogState extends State<MiviotTramiteDialog> {
   @override
   Widget build(BuildContext context) {
     final msg = AppMessages.current;
-    final theme = Theme.of(context);
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
