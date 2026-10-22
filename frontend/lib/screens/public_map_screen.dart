@@ -128,26 +128,6 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
   }
 
   Future<void> _solicitarRefrescoManual() async {
-    final ahora = DateTime.now();
-    if (_ultimoRefresco != null) {
-      final diffSegundos = ahora.difference(_ultimoRefresco!).inSeconds;
-      final segundosMinimos = AppConfig.publicMonitoringCacheMinutes * 60;
-      if (diffSegundos < segundosMinimos) {
-        final restan = segundosMinimos - diffSegundos;
-        if (mounted) {
-          final msg = AppMessages.current;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(msg.recentDataWaitNotice(diffSegundos, restan)),
-              duration: const Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return;
-      }
-    }
-
     await _cargarReportes(esRefrescoManual: true);
   }
 
@@ -184,7 +164,15 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
     }
 
     // 2. Determinar si se consulta a AWS (delta o carga inicial)
-    bool debeConsultarAws = esRefrescoManual || cachedFeaturesMap.isEmpty;
+    final hasSinaproc = cachedFeaturesMap.values.any((f) {
+      if (f is Map<String, dynamic>) {
+        final p = f['properties'] as Map<String, dynamic>?;
+        return p?['fuente'] == 'SINAPROC';
+      }
+      return false;
+    });
+
+    bool debeConsultarAws = esRefrescoManual || cachedFeaturesMap.isEmpty || !hasSinaproc;
     if (!debeConsultarAws && _ultimoRefresco != null) {
       final diffMinutos = DateTime.now().difference(_ultimoRefresco!).inMinutes;
       if (diffMinutos >= AppConfig.publicMonitoringCacheMinutes) {
@@ -193,9 +181,9 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
     }
 
     if (debeConsultarAws) {
-      final sinceParam = (cachedFeaturesMap.isNotEmpty && _ultimoRefresco != null)
-          ? _ultimoRefresco!.toUtc().toIso8601String()
-          : null;
+      final sinceParam = (esRefrescoManual || !hasSinaproc || cachedFeaturesMap.isEmpty || _ultimoRefresco == null)
+          ? null
+          : _ultimoRefresco!.toUtc().toIso8601String();
 
       final geojson = await ApiService.fetchPublicReports(since: sinceParam);
       if (geojson != null && geojson['features'] is List) {

@@ -76,14 +76,8 @@ def lambda_handler(event: dict, context) -> dict:
         # 2. Escaneo de reportes oficiales de SINAPROC
         ext_items = []
         try:
-            if since_filter:
-                from boto3.dynamodb.conditions import Attr
-                response_ext = external_table.scan(
-                    FilterExpression=Attr("timestamp").gt(since_filter),
-                    Limit=300,
-                )
-            else:
-                response_ext = external_table.scan(Limit=300)
+            # En la vista pública unificada, asegurar la disponibilidad de los registros oficiales de SINAPROC
+            response_ext = external_table.scan(Limit=500)
             ext_items = response_ext.get("Items", [])
         except Exception as ext_err:
             logger.warning("Error leyendo ExternalReportsTable: %s", str(ext_err))
