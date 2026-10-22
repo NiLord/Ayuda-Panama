@@ -176,21 +176,22 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Botón Secundario: VER SITUACIÓN CIUDADANA
+            // Botón Secundario: VER SITUACIÓN NACIONAL
             OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
+              onPressed: () async {
+                await Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const PublicMapScreen()),
                 );
+                _actualizarEstado();
               },
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 side: BorderSide(color: Colors.blueGrey.shade800, width: 2),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: Icon(Icons.map, color: Colors.blueGrey.shade900),
+              icon: Icon(Icons.public, color: Colors.blueGrey.shade900),
               label: Text(
-                'VER SITUACIÓN EN LOS SANTOS',
+                'VER SITUACIÓN NACIONAL',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.blueGrey.shade900),
               ),
             ),

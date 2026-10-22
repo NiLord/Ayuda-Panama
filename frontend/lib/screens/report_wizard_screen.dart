@@ -12,7 +12,8 @@ import '../services/telemetry_service.dart';
 import '../utils/panama_text_normalizer.dart';
 
 class ReportWizardScreen extends StatefulWidget {
-  const ReportWizardScreen({super.key});
+  final DisasterReport? initialReport;
+  const ReportWizardScreen({super.key, this.initialReport});
 
   @override
   State<ReportWizardScreen> createState() => _ReportWizardScreenState();
@@ -89,8 +90,70 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   @override
   void initState() {
     super.initState();
-    _cargarPerfilInformante();
-    _capturarGpsInicial();
+    if (widget.initialReport != null) {
+      final rep = widget.initialReport!;
+      _provincia = rep.provincia;
+      _distrito = rep.distrito;
+      _corregimiento = rep.corregimiento;
+      _comunidadCtrl.text = rep.comunidadSector;
+      _calleCtrl.text = rep.calleDireccion;
+      _referenciaCtrl.text = rep.puntoReferencia ?? '';
+      _lat = rep.latitud;
+      _lng = rep.longitud;
+      _precisionMetros = rep.precisionMetros;
+      _estadoGeolocalizacion = 'Ubicación cargada del reporte existente';
+
+      _habitabilidad = NivelHabitabilidad.values.firstWhere(
+        (n) => n.value == rep.habitabilidad,
+        orElse: () => NivelHabitabilidad.inhabitable,
+      );
+      _tipoInmueble = rep.tipoInmueble;
+      _sistemaConstructivo = rep.sistemaConstructivo;
+      _riesgoColapso = rep.riesgoColapsoInminente;
+      _fugaGas = rep.fugaGas;
+      _cablesCaidos = rep.electricidad.contains('CABLES');
+      _aguaPotable = rep.aguaPotable;
+      _descripcionDanoCtrl.text = rep.descripcionDano ?? '';
+
+      _atrapados = rep.atrapadosDesaparecidos;
+      _lesionados = rep.lesionadosGraves;
+      _neonatos = rep.neonatos;
+      _ninos = rep.ninos;
+      _adolescentes = rep.adolescentes;
+      _adultos = rep.adultos;
+      _adultosMayores = rep.adultosMayores;
+      _embarazadas = rep.embarazadas;
+      _discapacitados = rep.personasDiscapacidad;
+      _requiereAlbergue = rep.requiereAlbergue;
+      _requiereAguaAlimentos = rep.requiereAguaAlimentos;
+
+      _esElMismoInformante = rep.esElMismoInformante;
+      _afectadoNombreCtrl.text = rep.afectadoNombre ?? '';
+      _afectadoCedulaCtrl.text = rep.documentoNumero ?? '';
+      _afectadoTelefonoCtrl.text = rep.afectadoTelefono ?? '';
+      _consentimientoDado = rep.consentimientoInformado;
+
+      // Cargar fotos previas si existían
+      for (final ev in rep.evidencias) {
+        if (ev.tipo == TipoFotoEvidencia.identificacion.value && _fotoIdentificacion == null) {
+          _fotoIdentificacion = ev;
+        } else if (ev.tipo == TipoFotoEvidencia.estructuraDano.value) {
+          _fotosEstructura.add(ev);
+        }
+      }
+      _clampearCondicionesEspeciales();
+    } else {
+      _cargarPerfilInformante();
+      _capturarGpsInicial();
+    }
+  }
+
+  void _clampearCondicionesEspeciales() {
+    final maxTotal = _totalOcupantes;
+    if (_embarazadas > maxTotal) _embarazadas = maxTotal;
+    if (_discapacitados > maxTotal) _discapacitados = maxTotal;
+    if (_atrapados > maxTotal) _atrapados = maxTotal;
+    if (_lesionados > maxTotal) _lesionados = maxTotal;
   }
 
   Future<void> _cargarPerfilInformante() async {
@@ -347,8 +410,8 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
       final fotosUrls = todasLasEvidencias.map((e) => e.rutaLocal).toList();
 
       final report = DisasterReport(
-        reportId: 'rep_${const Uuid().v4()}',
-        timestamp: DateTime.now().toUtc().toIso8601String(),
+        reportId: widget.initialReport?.reportId ?? 'rep_${const Uuid().v4()}',
+        timestamp: widget.initialReport?.timestamp ?? DateTime.now().toUtc().toIso8601String(),
         consentimientoInformado: _consentimientoDado,
         tipoEvento: _tipoEvento,
         codigoEvento: _codigoEvento,
@@ -417,10 +480,8 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
       // Intentar enviar a AWS
       final exito = await ApiService.submitReport(report);
 
-      if (!exito) {
-        // Encolar offline automáticamente
-        await OfflineQueueService.enqueueReport(report);
-      }
+      // Guardar o actualizar siempre en el registro local histórico (marcando si está sincronizado o pendiente)
+      await OfflineQueueService.saveLocalReport(report, isSynced: exito);
 
       if (mounted) {
         showDialog(
@@ -469,7 +530,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nuevo Reporte de Emergencia'),
+        title: Text(widget.initialReport != null ? 'Editar Reporte de Emergencia' : 'Nuevo Reporte de Emergencia'),
         backgroundColor: Colors.red.shade800,
         foregroundColor: Colors.white,
       ),
@@ -536,7 +597,27 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
           return Padding(
             padding: const EdgeInsets.only(top: 20),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // Botón ATRÁS o CANCELAR a la IZQUIERDA
+                if (_currentStep > 0)
+                  OutlinedButton(
+                    onPressed: details.onStepCancel,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    ),
+                    child: const Text('ATRÁS'),
+                  )
+                else
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    ),
+                    child: const Text('CANCELAR'),
+                  ),
+                const SizedBox(width: 12),
+                // Botón SIGUIENTE o FINALIZAR a la DERECHA
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _enviando ? null : details.onStepContinue,
@@ -551,16 +632,9 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                             height: 20,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                           )
-                        : Text(isLast ? 'FINALIZAR Y ENVIAR' : 'SIGUIENTE'),
+                        : Text(isLast ? (widget.initialReport != null ? 'ACTUALIZAR Y ENVIAR' : 'FINALIZAR Y ENVIAR') : 'SIGUIENTE'),
                   ),
                 ),
-                if (_currentStep > 0) ...[
-                  const SizedBox(width: 12),
-                  OutlinedButton(
-                    onPressed: details.onStepCancel,
-                    child: const Text('ATRÁS'),
-                  ),
-                ],
               ],
             ),
           );
@@ -984,11 +1058,36 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
                 ),
                 const SizedBox(height: 4),
-                _buildCounter('Bebés (0 a 2 años):', _neonatos, (v) => setState(() => _neonatos = v)),
-                _buildCounter('Niños (3 a 12 años):', _ninos, (v) => setState(() => _ninos = v)),
-                _buildCounter('Adolescentes (13 a 17 años):', _adolescentes, (v) => setState(() => _adolescentes = v)),
-                _buildCounter('Adultos (18 a 59 años):', _adultos, (v) => setState(() => _adultos = v)),
-                _buildCounter('Adultos mayores (60+ años):', _adultosMayores, (v) => setState(() => _adultosMayores = v)),
+                _buildCounter('Bebés (0 a 2 años):', _neonatos, (v) {
+                  setState(() {
+                    _neonatos = v;
+                    _clampearCondicionesEspeciales();
+                  });
+                }),
+                _buildCounter('Niños (3 a 12 años):', _ninos, (v) {
+                  setState(() {
+                    _ninos = v;
+                    _clampearCondicionesEspeciales();
+                  });
+                }),
+                _buildCounter('Adolescentes (13 a 17 años):', _adolescentes, (v) {
+                  setState(() {
+                    _adolescentes = v;
+                    _clampearCondicionesEspeciales();
+                  });
+                }),
+                _buildCounter('Adultos (18 a 59 años):', _adultos, (v) {
+                  setState(() {
+                    _adultos = v;
+                    _clampearCondicionesEspeciales();
+                  });
+                }),
+                _buildCounter('Adultos mayores (60+ años):', _adultosMayores, (v) {
+                  setState(() {
+                    _adultosMayores = v;
+                    _clampearCondicionesEspeciales();
+                  });
+                }),
 
                 const Divider(height: 24),
                 const Text(
@@ -996,8 +1095,20 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
                 ),
                 const SizedBox(height: 4),
-                _buildCounter('Mujeres embarazadas:', _embarazadas, (v) => setState(() => _embarazadas = v)),
-                _buildCounter('Personas con discapacidad:', _discapacitados, (v) => setState(() => _discapacitados = v)),
+                _buildCounter(
+                  'Mujeres embarazadas:',
+                  _embarazadas,
+                  (v) => setState(() => _embarazadas = v),
+                  maxVal: _totalOcupantes,
+                  helperSubtitle: '(Máx. $_totalOcupantes según total del hogar)',
+                ),
+                _buildCounter(
+                  'Personas con discapacidad:',
+                  _discapacitados,
+                  (v) => setState(() => _discapacitados = v),
+                  maxVal: _totalOcupantes,
+                  helperSubtitle: '(Máx. $_totalOcupantes según total del hogar)',
+                ),
 
                 const Divider(height: 24),
                 const Text(
@@ -1005,8 +1116,21 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
                 ),
                 const SizedBox(height: 4),
-                _buildCounter('Personas atrapadas o desaparecidas:', _atrapados, (v) => setState(() => _atrapados = v), isCritical: true),
-                _buildCounter('Personas con lesiones que requieren hospital:', _lesionados, (v) => setState(() => _lesionados = v)),
+                _buildCounter(
+                  'Personas atrapadas o desaparecidas:',
+                  _atrapados,
+                  (v) => setState(() => _atrapados = v),
+                  isCritical: true,
+                  maxVal: _totalOcupantes,
+                  helperSubtitle: '(Máx. $_totalOcupantes según total del hogar)',
+                ),
+                _buildCounter(
+                  'Personas con lesiones que requieren hospital:',
+                  _lesionados,
+                  (v) => setState(() => _lesionados = v),
+                  maxVal: _totalOcupantes,
+                  helperSubtitle: '(Máx. $_totalOcupantes según total del hogar)',
+                ),
                 const Divider(),
                 SwitchListTile(
                   title: const Text('¿Requiere albergue temporal de inmediato?'),
@@ -1215,19 +1339,37 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
     );
   }
 
-  Widget _buildCounter(String title, int val, Function(int) onChanged, {bool isCritical = false}) {
+  Widget _buildCounter(
+    String title,
+    int val,
+    Function(int) onChanged, {
+    bool isCritical = false,
+    int? maxVal,
+    String? helperSubtitle,
+  }) {
+    final canIncrement = maxVal == null || val < maxVal;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontWeight: isCritical ? FontWeight.bold : FontWeight.normal,
-                color: isCritical && val > 0 ? Colors.red : Colors.black87,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: isCritical ? FontWeight.bold : FontWeight.normal,
+                    color: isCritical && val > 0 ? Colors.red : Colors.black87,
+                  ),
+                ),
+                if (helperSubtitle != null)
+                  Text(
+                    helperSubtitle,
+                    style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  ),
+              ],
             ),
           ),
           Row(
@@ -1239,7 +1381,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
               Text('$val', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               IconButton(
                 icon: const Icon(Icons.add_circle_outline),
-                onPressed: () => onChanged(val + 1),
+                onPressed: canIncrement ? () => onChanged(val + 1) : null,
               ),
             ],
           ),
