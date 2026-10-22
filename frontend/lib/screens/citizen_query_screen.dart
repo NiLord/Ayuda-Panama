@@ -699,16 +699,23 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
                 ),
                 const Divider(height: 24),
                 if (tieneMiviot) ...[
-                  _buildFilaDato('Número de Expediente:', _miviotResult!.reporte ?? 'Asignado'),
-                  if (_miviotResult!.fechaRecibido != null)
-                    _buildFilaDato('Fecha de Recepción:', _formatearFecha(_miviotResult!.fechaRecibido)),
-                  _buildFilaDato('Estado Actual:', _miviotResult!.estadoActual ?? 'En evaluación'),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Etapas del Proceso de Solución Habitacional:',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        'Reporte ${_miviotResult!.reporte ?? "AFV"}',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                      ),
+                      if (_miviotResult!.fechaRecibido != null)
+                        Text(
+                          'Recibido el ${_miviotResult!.fechaRecibido}',
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
                   _buildStepperMiviot(_miviotResult!.pasoActual ?? 1),
                 ] else if (_miviotResult != null && _miviotResult!.tieneError) ...[
                   Container(
@@ -872,79 +879,74 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
   }
 
   Widget _buildStepperMiviot(int pasoActual) {
-    final pasos = [
-      'Recepción de Solicitud',
-      'Inspección Técnica de Daños',
-      'Evaluación Social y Económica',
-      'Asignación de Solución',
-      'Entrega de Vivienda / Enseres',
-    ];
+    final pasos = MiviotTramiteResult.etapasOficiales;
 
     return Column(
       children: List.generate(pasos.length, (index) {
         final pasoNumero = index + 1;
-        final isCompletado = pasoNumero < pasoActual;
         final isActual = pasoNumero == pasoActual;
 
-        Color dotColor;
-        IconData dotIcon;
-        if (isCompletado) {
-          dotColor = Colors.green.shade700;
-          dotIcon = Icons.check_circle;
-        } else if (isActual) {
-          dotColor = const Color(0xFF1B5E20);
-          dotIcon = Icons.radio_button_checked;
-        } else {
-          dotColor = Colors.grey.shade400;
-          dotIcon = Icons.radio_button_unchecked;
-        }
+        // Círculo verde #2e7d32 para la etapa actual, gris/azulado #8FA0AC para las demás
+        final circleColor = isActual ? const Color(0xFF2E7D32) : const Color(0xFF8FA0AC);
 
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        return Column(
           children: [
-            Column(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Icon(dotIcon, size: 20, color: dotColor),
-                if (index < pasos.length - 1)
-                  Container(
-                    width: 2,
-                    height: 22,
-                    color: isCompletado ? Colors.green.shade700 : Colors.grey.shade300,
+                // Círculo numerado oficial
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: circleColor,
+                    shape: BoxShape.circle,
                   ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$pasoNumero',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                // Descripción oficial de la etapa
+                Expanded(
+                  child: Text(
+                    pasos[index],
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: isActual ? FontWeight.bold : FontWeight.normal,
+                      color: isActual ? Colors.black87 : const Color(0xFF4B5563),
+                      height: 1.3,
+                    ),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 1),
+            // Flecha vertical conectando etapas
+            if (index < pasos.length - 1)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        pasos[index],
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: isActual ? FontWeight.bold : FontWeight.normal,
-                          color: isActual ? Colors.black87 : Colors.grey.shade600,
+                    SizedBox(
+                      width: 36,
+                      child: Center(
+                        child: Icon(
+                          Icons.arrow_downward_rounded,
+                          size: 18,
+                          color: Colors.grey.shade600,
                         ),
                       ),
                     ),
-                    if (isActual)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade100,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'ETAPA ACTUAL',
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.green.shade900),
-                        ),
-                      ),
+                    const Expanded(child: SizedBox()),
                   ],
                 ),
               ),
-            ),
           ],
         );
       }),

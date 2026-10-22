@@ -243,22 +243,22 @@ class MiviotAdapter:
     @staticmethod
     def _extract_etapa_activa(html: str) -> Tuple[Optional[int], Optional[str]]:
         """
-        Extrae el paso actual (1 al 5) y la descripción de la etapa activa.
-        Busca elementos con color verde (#2e7d32) o clase fw-bold en el bloque de fases.
+        Extrae el paso actual (1 al 5) y la descripción oficial de la etapa activa del MIVIOT.
+        Basado en la estructura del portal oficial de afectaciones de vivienda del MIVIOT.
         """
+        # Lista literal de las 5 etapas oficiales del portal MIVIOT:
+        etapas_miviot = [
+            "Reporte de afectación de vivienda registrado. Pendiente evaluación técnica.",
+            "Vivienda evaluada. Pendiente asignación de programa.",
+            "Programa asignado. Pendiente construcción.",
+            "Construcción en proceso.",
+            "Vivienda entregada."
+        ]
+
         paso_actual = None
         estado_actual = None
 
-        # Lista estándar de las 5 etapas oficiales del MIVIOT:
-        etapas_miviot = [
-            "Recepción y Registro de Solicitud",
-            "Evaluación Técnica en Sitio",
-            "Validación Socioeconómica y Social",
-            "Asignación de Beneficio / Solución Habitacional",
-            "Entrega de Ayuda o Vivienda Finalizada"
-        ]
-
-        # Buscar el paso numérico asociado al color verde #2e7d32
+        # 1. Buscar el paso numérico asociado al círculo verde #2e7d32
         # Ej: <div ... style="...background-color:#2e7d32...">2</div>
         paso_match = re.search(r'background-color\s*:\s*#2e7d32[^>]*>\s*([1-5])\s*<', html, re.IGNORECASE)
         if paso_match:
@@ -267,21 +267,19 @@ class MiviotAdapter:
             except ValueError:
                 pass
 
-        # Buscar texto descriptivo con clase fw-bold
-        # Ej: <span class="fw-bold">Evaluación Técnica en Sitio</span> o <p class="... fw-bold ...">...</p>
-        bold_match = re.search(r'<[^>]+class=["\'][^"\']*fw-bold[^"\']*["\'][^>]*>\s*([^<]+)\s*<', html)
-        if bold_match:
-            estado_actual = bold_match.group(1).strip()
+        # 2. Buscar si alguna de las 5 etapas oficiales aparece en negrita o en el contenido
+        for idx, etapa in enumerate(etapas_miviot, start=1):
+            # Escapar para regex seguro
+            etapa_pat = re.escape(etapa)
+            if re.search(rf'class=["\'][^"\']*fw-bold[^"\']*["\'][^>]*>\s*{etapa_pat}', html, re.IGNORECASE) or \
+               re.search(rf'<strong>\s*{etapa_pat}\s*</strong>', html, re.IGNORECASE):
+                paso_actual = idx
+                estado_actual = etapa
+                break
 
-        # Si encontramos el paso numérico pero no el texto, inferir por índice de lista
-        if paso_actual and not estado_actual and 1 <= paso_actual <= len(etapas_miviot):
+        # 3. Si tenemos el paso numérico, asignar la descripción oficial exacta
+        if paso_actual and 1 <= paso_actual <= len(etapas_miviot):
             estado_actual = etapas_miviot[paso_actual - 1]
 
-        # Si encontramos el texto pero no el paso, inferir el paso por el texto
-        if estado_actual and not paso_actual:
-            for idx, etapa in enumerate(etapas_miviot, start=1):
-                if etapa.lower() in estado_actual.lower() or estado_actual.lower() in etapa.lower():
-                    paso_actual = idx
-                    break
-
-        return paso_actual or 1, estado_actual or "En Evaluación"
+        # 4. Fallback si no se encontró paso específico
+        return paso_actual or 1, estado_actual or etapas_miviot[0]

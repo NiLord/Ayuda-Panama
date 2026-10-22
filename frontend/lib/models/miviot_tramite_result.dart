@@ -61,12 +61,12 @@ class MiviotTramiteResult {
     );
   }
 
-  /// Nombres oficiales de las 5 etapas del MIVIOT
+  /// Nombres oficiales literales de las 5 etapas del MIVIOT (según el portal oficial de afectaciones)
   static const List<String> etapasOficiales = [
-    'Recepción y Registro de Solicitud',
-    'Evaluación Técnica en Sitio',
-    'Validación Socioeconómica',
-    'Asignación de Solución Habitacional',
-    'Entrega de Ayuda o Vivienda Finalizada',
+    'Reporte de afectación de vivienda registrado. Pendiente evaluación técnica.',
+    'Vivienda evaluada. Pendiente asignación de programa.',
+    'Programa asignado. Pendiente construcción.',
+    'Construcción en proceso.',
+    'Vivienda entregada.',
   ];
 }
