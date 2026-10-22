@@ -43,6 +43,10 @@ Resources:
           AttributeType: S
         - AttributeName: GSI1SK
           AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSI2SK
+          AttributeType: S
       KeySchema:
         - AttributeName: PK
           KeyType: HASH
@@ -54,6 +58,14 @@ Resources:
             - AttributeName: GSI1PK
               KeyType: HASH
             - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2_Cedula
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSI2SK
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
@@ -77,6 +89,66 @@ Resources:
           KeyType: HASH
         - AttributeName: SK
           KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+
+  ExternalReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub lse-external-reports-table-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI_CedulaPK
+          AttributeType: S
+        - AttributeName: GSI_CedulaSK
+          AttributeType: S
+        - AttributeName: GSI_UbicacionPK
+          AttributeType: S
+        - AttributeName: GSI_UbicacionSK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI_Cedula
+          KeySchema:
+            - AttributeName: GSI_CedulaPK
+              KeyType: HASH
+            - AttributeName: GSI_CedulaSK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI_Ubicacion
+          KeySchema:
+            - AttributeName: GSI_UbicacionPK
+              KeyType: HASH
+            - AttributeName: GSI_UbicacionSK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+
+  MiviotTramitesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub lse-miviot-tramites-table-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl_expiration
+        Enabled: true
       SSESpecification:
         SSEEnabled: true
 
@@ -135,6 +207,9 @@ Resources:
                   - !GetAtt ReportsTable.Arn
                   - !Sub ${ReportsTable.Arn}/index/*
                   - !GetAtt ReportersTable.Arn
+                  - !GetAtt ExternalReportsTable.Arn
+                  - !Sub ${ExternalReportsTable.Arn}/index/*
+                  - !GetAtt MiviotTramitesTable.Arn
         - PolicyName: S3EvidenceAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -204,6 +279,7 @@ Resources:
         Variables:
           REPORTS_TABLE_NAME: !Ref ReportsTable
           REPORTERS_TABLE_NAME: !Ref ReportersTable
+          EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -221,10 +297,64 @@ Resources:
       Environment:
         Variables:
           REPORTS_TABLE_NAME: !Ref ReportsTable
+          EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):
               return {"statusCode": 200, "body": '{"type":"FeatureCollection","features":[]}'}
+
+  CheckDuplicateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-check-duplicate-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.check_duplicate.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          REPORTS_TABLE_NAME: !Ref ReportsTable
+          EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
+          MIVIOT_TRAMITES_TABLE_NAME: !Ref MiviotTramitesTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "{}"}
+
+  GetMiviotTramiteFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-get-miviot-tramite-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.get_miviot_tramite.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          MIVIOT_TRAMITES_TABLE_NAME: !Ref MiviotTramitesTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "{}"}
+
+  SyncSinaprocFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-sync-sinaproc-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.sync_sinaproc.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "{}"}
 
   GetPresignedUrlFunction:
     Type: AWS::Lambda::Function
@@ -413,6 +543,40 @@ Resources:
       RouteKey: GET /api/v1/reports/export
       Target: !Sub integrations/${ExportIntegration}
 
+  CheckDuplicateIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt CheckDuplicateFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  CheckDuplicateRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /api/v1/reports/check-duplicate
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref HttpApiAuthorizer
+      Target: !Sub integrations/${CheckDuplicateIntegration}
+
+  MiviotTramiteIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetMiviotTramiteFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  MiviotTramiteRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /api/v1/tramites/miviot
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref HttpApiAuthorizer
+      Target: !Sub integrations/${MiviotTramiteIntegration}
+
   # Permisos para que API Gateway invoque las Lambdas
   SubmitPermission:
     Type: AWS::Lambda::Permission
@@ -426,6 +590,22 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref GetPublicReportsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  CheckDuplicatePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CheckDuplicateFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  MiviotTramitePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetMiviotTramiteFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
@@ -461,6 +641,14 @@ Outputs:
   ReportersTableName:
     Description: Nombre de la tabla DynamoDB de informantes
     Value: !Ref ReportersTable
+
+  ExternalReportsTableName:
+    Description: Nombre de la tabla DynamoDB de reportes externos (SINAPROC EDAN)
+    Value: !Ref ExternalReportsTable
+
+  MiviotTramitesTableName:
+    Description: Nombre de la tabla DynamoDB de trámites MIVIOT
+    Value: !Ref MiviotTramitesTable
 
   EvidenceBucketName:
     Description: Nombre del bucket S3 para fotos de evidencia

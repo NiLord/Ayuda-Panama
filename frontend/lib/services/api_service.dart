@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../models/disaster_report.dart';
+import '../models/duplicate_check_result.dart';
+import '../models/miviot_tramite_result.dart';
 
 class ApiService {
   /// URL base dinámica resuelta desde AppConfig (centralizada en AWS SSM)
@@ -144,6 +146,72 @@ class ApiService {
 
       if (uploadResponse.statusCode == 200) {
         return finalResourceUrl;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Verifica en tiempo real si ya existe una evaluación previa para la cédula en la App o SINAPROC
+  static Future<DuplicateCheckResult> checkCedulaDuplicate(String cedula) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/v1/reports/check-duplicate');
+      final response = await http
+          .post(
+            url,
+            headers: _authHeaders,
+            body: jsonEncode({'cedula': cedula}),
+          )
+          .timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return DuplicateCheckResult.fromJson(data);
+      } else {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return DuplicateCheckResult(
+          success: false,
+          existeDuplicado: false,
+          cedula: cedula,
+          cedulaCensurada: '',
+          sistemas: [],
+          detalles: [],
+          mensaje: data['mensaje'] as String? ?? 'Error verificando cédula',
+          error: data['error'] as String?,
+        );
+      }
+    } catch (e) {
+      return DuplicateCheckResult(
+        success: false,
+        existeDuplicado: false,
+        cedula: cedula,
+        cedulaCensurada: '',
+        sistemas: [],
+        detalles: [],
+        mensaje: 'No fue posible validar la cédula por problemas de conexión.',
+        error: e.toString(),
+      );
+    }
+  }
+
+  /// Consulta el expediente y avance en las 5 etapas del MIVIOT para una cédula
+  static Future<MiviotTramiteResult?> fetchMiviotTramite(
+    String cedula, {
+    bool force = false,
+  }) async {
+    try {
+      final forceParam = force ? '&force=true' : '';
+      final url = Uri.parse(
+        '$baseUrl/api/v1/tramites/miviot?cedula=${Uri.encodeComponent(cedula)}$forceParam',
+      );
+      final response = await http
+          .get(url, headers: _authHeaders)
+          .timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return MiviotTramiteResult.fromJson(data);
       }
       return null;
     } catch (_) {

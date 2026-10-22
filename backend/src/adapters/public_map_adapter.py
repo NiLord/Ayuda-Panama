@@ -1,42 +1,23 @@
 """
 Public Map Adapter (Privacy by Design)
-Transforma evaluaciones a GeoJSON público sin PII para visualización ciudadana.
+Transforma evaluaciones y reportes externos a GeoJSON público sin PII para visualización ciudadana.
 Cumple estrictamente con la Ley 81 de Protección de Datos de Panamá.
 """
 
-from typing import Dict, Any, List
+from decimal import Decimal
+from typing import Dict, Any, List, Optional
 from ..models.disaster_assessment import DisasterAssessment, NivelHabitabilidad
+from ..utils.cedula_normalizer import mask_cedula as normalizer_mask_cedula, mask_person_name as normalizer_mask_name
 
 
 def mask_cedula(cedula: str) -> str:
-    """Enmascara la cédula panameña (ej. 7-708-417 -> 7-***-417) para proteger PII según Ley 81"""
-    if not cedula or not isinstance(cedula, str):
-        return ""
-    c = cedula.strip()
-    if len(c) <= 4:
-        return c[:1] + "***" + c[-1:]
-    parts = c.split("-")
-    if len(parts) >= 3:
-        return f"{parts[0]}-***-{parts[-1]}"
-    elif len(parts) == 2:
-        suffix = parts[1][-3:] if len(parts[1]) >= 3 else parts[1]
-        return f"{parts[0]}-***-{suffix}"
-    else:
-        return f"{c[:2]}***{c[-3:]}"
+    """Enmascara la cédula panameña (ej. 7-708-417 -> 7-*****417) para proteger PII según Ley 81"""
+    return normalizer_mask_cedula(cedula)
 
 
 def mask_name(full_name: str) -> str:
     """Enmascara el nombre dejando solo el primer nombre e inicial (ej. Fernando Gonzalez -> Fernando G.)"""
-    if not full_name or not isinstance(full_name, str):
-        return ""
-    parts = full_name.strip().split()
-    if not parts:
-        return ""
-    first_name = parts[0].capitalize()
-    if len(parts) > 1 and parts[1]:
-        initial = parts[1][0].upper()
-        return f"{first_name} {initial}."
-    return first_name
+    return normalizer_mask_name(full_name)
 
 
 class PublicMapAdapter:
@@ -51,7 +32,7 @@ class PublicMapAdapter:
 
     @classmethod
     def to_public_feature(cls, assessment: DisasterAssessment) -> Dict[str, Any]:
-        """Convierte una evaluación en un Feature GeoJSON seguro sin PII"""
+        """Convierte una evaluación de la App en un Feature GeoJSON seguro sin PII"""
         habitabilidad = assessment.evaluacion_estructural.habitabilidad.value
         color = cls.COLOR_MAP.get(habitabilidad, "#95A5A6")
 
@@ -60,7 +41,7 @@ class PublicMapAdapter:
 
         sistemas = assessment.metadatos_evento.get("sistemas_vinculados")
         if not sistemas:
-            sistemas = ["APP", "SINAPROC"]
+            sistemas = ["APP"]
 
         return {
             "type": "Feature",
@@ -74,6 +55,7 @@ class PublicMapAdapter:
             "properties": {
                 "id": assessment.report_id,
                 "report_id": assessment.report_id,
+                "fuente": "APP",
                 "timestamp": assessment.timestamp,
                 "prioridad": assessment.prioridad.value,
                 "semaforo_color": color,
@@ -105,9 +87,73 @@ class PublicMapAdapter:
         }
 
     @classmethod
-    def to_feature_collection(cls, assessments: List[DisasterAssessment]) -> Dict[str, Any]:
-        """Agrupa múltiples evaluaciones en un FeatureCollection GeoJSON"""
+    def to_public_feature_from_external(cls, item: Dict[str, Any]) -> Dict[str, Any]:
+        """Convierte un ítem de ExternalReportsTable (SINAPROC EDAN) en Feature GeoJSON"""
+        habitabilidad = item.get("habitabilidad", "HABITABLE")
+        color = cls.COLOR_MAP.get(habitabilidad, "#95A5A6")
+
+        coords = item.get("ubicacion", {}).get("coordenadas", {})
+        lat = float(coords.get("lat", 7.625)) if coords.get("lat") is not None else 7.625
+        lng = float(coords.get("lng", -80.354)) if coords.get("lng") is not None else -80.354
+
+        ext_id = item.get("external_id") or item.get("PK", "").replace("SINAPROC#", "")
+        fuente = item.get("fuente", "SINAPROC")
+
+        return {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [lng, lat],
+            },
+            "properties": {
+                "id": f"{fuente}_{ext_id}",
+                "report_id": f"sinaproc_{ext_id}",
+                "external_id": ext_id,
+                "fuente": fuente,
+                "timestamp": item.get("timestamp", ""),
+                "prioridad": "P2_URGENTE_ALBERGUE" if habitabilidad in ["INHABITABLE", "COLAPSO_TOTAL"] else "P3_MONITOREO_ENSERES",
+                "semaforo_color": color,
+                "habitabilidad": habitabilidad,
+                "riesgo_colapso": habitabilidad in ["INHABITABLE", "COLAPSO_TOTAL"],
+                "tipo_inmueble": "RESIDENCIAL_CASA",
+                "provincia": item.get("ubicacion", {}).get("provincia", "Los Santos"),
+                "distrito": item.get("ubicacion", {}).get("distrito", "Las Tablas"),
+                "corregimiento": item.get("ubicacion", {}).get("corregimiento", ""),
+                "comunidad_sector": item.get("ubicacion", {}).get("comunidad_sector", ""),
+                "accesibilidad_vial": "TRANSITABLE",
+                "total_ocupantes": 1,
+                "reporter_id": item.get("evaluador", "SINAPROC"),
+                "fotos_urls": [],
+                "nombre_mascarado": item.get("nombre_titular_censurado") or "Residente",
+                "cedula_mascarada": item.get("cedula_censurada") or "7-*****000",
+                "sistemas_vinculados": [fuente],
+                "servicios_afectados": {
+                    "agua_potable": "NORMAL",
+                    "electricidad": "NORMAL",
+                    "fuga_gas": False,
+                },
+                "necesidades_urgentes": {
+                    "albergue": habitabilidad in ["INHABITABLE", "COLAPSO_TOTAL"],
+                    "agua_alimentos": False,
+                    "rescate_medico": False,
+                },
+            },
+        }
+
+    @classmethod
+    def to_feature_collection(
+        cls,
+        assessments: Optional[List[DisasterAssessment]] = None,
+        external_items: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Agrupa evaluaciones de la App y reportes externos en un FeatureCollection GeoJSON consolidado"""
+        features = []
+        if assessments:
+            features.extend([cls.to_public_feature(a) for a in assessments])
+        if external_items:
+            features.extend([cls.to_public_feature_from_external(it) for it in external_items])
+
         return {
             "type": "FeatureCollection",
-            "features": [cls.to_public_feature(a) for a in assessments],
+            "features": features,
         }

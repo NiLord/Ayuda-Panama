@@ -1,12 +1,15 @@
 """
 Lambda Handler: lse-get-public-reports
-Entrega las evaluaciones en formato GeoJSON público con semáforo de habitabilidad (ATC-20).
+Entrega las evaluaciones ciudadanas y los reportes oficiales de SINAPROC en formato
+GeoJSON público unificado con semáforo de habitabilidad (ATC-20).
 Filtra y anonimiza el 100% de la información personal identificable (PII) según la Ley 81.
 """
 
 import json
+import logging
 import os
 import boto3
+
 from ..models.disaster_assessment import (
     DisasterAssessment,
     Informante,
@@ -26,9 +29,14 @@ from ..models.disaster_assessment import (
 )
 from ..adapters.public_map_adapter import PublicMapAdapter
 
+logger = logging.getLogger(__name__)
+
 REPORTS_TABLE_NAME = os.environ.get("REPORTS_TABLE_NAME", "lse-reports-table")
+EXTERNAL_REPORTS_TABLE_NAME = os.environ.get("EXTERNAL_REPORTS_TABLE_NAME", "lse-external-reports-table")
+
 dynamodb = boto3.resource("dynamodb")
 reports_table = dynamodb.Table(REPORTS_TABLE_NAME)
+external_table = dynamodb.Table(EXTERNAL_REPORTS_TABLE_NAME)
 
 
 def build_response(status_code: int, body: dict) -> dict:
@@ -37,7 +45,7 @@ def build_response(status_code: int, body: dict) -> dict:
         "headers": {
             "Content-Type": "application/geo+json",
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Headers": "Content-Type,X-Api-Key,X-App-Secret,Authorization",
             "Access-Control-Allow-Methods": "GET,OPTIONS",
             "Cache-Control": "public, max-age=60",
         },
@@ -53,20 +61,35 @@ def lambda_handler(event: dict, context) -> dict:
         query_params = event.get("queryStringParameters") or {}
         since_filter = query_params.get("since")
 
-        # Escaneo paginado de reportes recientes (soporta carga de delta con ?since=)
+        # 1. Escaneo de reportes ciudadanos de la App
         if since_filter:
             from boto3.dynamodb.conditions import Attr
-            response = reports_table.scan(
+            response_app = reports_table.scan(
                 FilterExpression=Attr("timestamp").gt(since_filter),
-                Limit=500,
+                Limit=300,
             )
         else:
-            response = reports_table.scan(Limit=500)
+            response_app = reports_table.scan(Limit=300)
 
-        items = response.get("Items", [])
+        app_items = response_app.get("Items", [])
+
+        # 2. Escaneo de reportes oficiales de SINAPROC
+        ext_items = []
+        try:
+            if since_filter:
+                from boto3.dynamodb.conditions import Attr
+                response_ext = external_table.scan(
+                    FilterExpression=Attr("timestamp").gt(since_filter),
+                    Limit=300,
+                )
+            else:
+                response_ext = external_table.scan(Limit=300)
+            ext_items = response_ext.get("Items", [])
+        except Exception as ext_err:
+            logger.warning("Error leyendo ExternalReportsTable: %s", str(ext_err))
 
         assessments = []
-        for item in items:
+        for item in app_items:
             try:
                 coords = item.get("ubicacion", {}).get("coordenadas", {})
                 cen_data = item.get("censo_demografico", {})
@@ -76,10 +99,9 @@ def lambda_handler(event: dict, context) -> dict:
                 inf_data = item.get("informante", {})
                 tit_data = item.get("titular_afectado", {})
                 metadatos_evento = item.get("metadatos_evento", {})
-                sistemas = item.get("sistemas_vinculados") or metadatos_evento.get("sistemas_vinculados") or ["APP", "SINAPROC"]
+                sistemas = item.get("sistemas_vinculados") or metadatos_evento.get("sistemas_vinculados") or ["APP"]
                 metadatos_evento["sistemas_vinculados"] = sistemas
 
-                # Filtrar solo fotos de daños (no identificación/cédula PII)
                 raw_fotos = item.get("fotos_urls", [])
                 public_fotos = [
                     f for f in raw_fotos
@@ -109,7 +131,7 @@ def lambda_handler(event: dict, context) -> dict:
                         distrito=item.get("ubicacion", {}).get("distrito", "Las Tablas"),
                         corregimiento=item.get("ubicacion", {}).get("corregimiento", ""),
                         comunidad_sector=item.get("ubicacion", {}).get("comunidad_sector", ""),
-                        calle_o_direccion="", # Oculto en vista pública para proteger privacidad
+                        calle_o_direccion="",
                         accesibilidad_vial=item.get("ubicacion", {}).get("accesibilidad_vial", "TRANSITABLE"),
                     ),
                     evaluacion_estructural=EvaluacionEstructural(
@@ -136,12 +158,12 @@ def lambda_handler(event: dict, context) -> dict:
                 )
                 assessments.append(assessment)
             except Exception as parse_err:
-                print(f"Error procesando item: {parse_err}")
+                logger.warning("Error procesando item: %s", str(parse_err))
                 continue
 
-        geojson = PublicMapAdapter.to_feature_collection(assessments)
+        geojson = PublicMapAdapter.to_feature_collection(assessments=assessments, external_items=ext_items)
         return build_response(200, geojson)
 
     except Exception as e:
-        print(f"Error recuperando reportes públicos: {e}")
+        logger.exception("Error recuperando reportes públicos: %s", str(e))
         return build_response(500, {"type": "FeatureCollection", "features": [], "error": str(e)})

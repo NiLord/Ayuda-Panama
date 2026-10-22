@@ -158,5 +158,21 @@
   "titular_info": "Head of Household: {name} • ID: {cedula}",
   "damage_habitability": "Damage: {habitability}",
   "hazard_collapse": "⚠️ Collapse Risk",
-  "hazard_shelter": "⛺ Shelter Needed"
+  "hazard_shelter": "⛺ Shelter Needed",
+
+  "duplicate_checking_cedula": "Verifying official disaster records...",
+  "duplicate_detected_title": "Home Already Evaluated / Official Case Active",
+  "duplicate_detected_body": "This citizen ID already has an evaluation or case in: {systems}. By emergency regulations and to avoid duplicating relief resources, new duplicate reports are not permitted for this household.",
+  "duplicate_block_action": "Duplicate Report Blocked",
+  "duplicate_view_tramite": "View MIVIOT Progress",
+  "duplicate_reenter_cedula": "Edit ID Number",
+
+  "miviot_dialog_title": "MIVIOT Housing Case File",
+  "miviot_report_number": "Case File: {number}",
+  "miviot_date_received": "Received: {date}",
+  "miviot_step_progress": "Stage {current} of 5: {status}",
+  "miviot_no_tramite": "No active housing case found for this ID in MIVIOT.",
+  "miviot_consulting_btn": "Check MIVIOT Status",
+  "miviot_refresh_btn": "Refresh MIVIOT",
+  "badge_sinaproc_edan": "SINAPROC EDAN"
 }

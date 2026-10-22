@@ -9,10 +9,12 @@ import '../services/offline_queue_service.dart';
 import '../services/panama_dpa_service.dart';
 import '../services/reporter_profile_service.dart';
 import 'report_wizard_screen.dart';
+import '../widgets/miviot_tramite_dialog.dart';
 
 class ReportViewModel {
   final String reportId;
   final String timestamp;
+  final String fuente;
   final String provincia;
   final String distrito;
   final String corregimiento;
@@ -33,6 +35,7 @@ class ReportViewModel {
   ReportViewModel({
     required this.reportId,
     required this.timestamp,
+    this.fuente = 'APP',
     required this.provincia,
     required this.distrito,
     required this.corregimiento,
@@ -271,11 +274,12 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
       if (repId.isEmpty) continue;
 
       final isMine = _myProfile != null && (props['reporter_id'] == _myProfile!.reporterId);
+      final fuente = (props['fuente'] as String?)?.toUpperCase() ?? 'APP';
       final remoteFotos = (props['fotos_urls'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
       final remoteSistemas = (props['sistemas_vinculados'] as List<dynamic>?)
               ?.map((e) => e.toString().toUpperCase())
               .toList() ??
-          ['APP', 'SINAPROC'];
+          [fuente];
 
       final remoteNombre = (props['nombre_mascarado'] as String?) ?? '';
       final remoteCedula = (props['cedula_mascarada'] as String?) ?? '';
@@ -285,6 +289,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
         itemsMap[repId] = ReportViewModel(
           reportId: existing.reportId,
           timestamp: existing.timestamp,
+          fuente: existing.fuente,
           provincia: existing.provincia,
           distrito: existing.distrito,
           corregimiento: existing.corregimiento,
@@ -306,6 +311,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
         itemsMap[repId] = ReportViewModel(
           reportId: repId,
           timestamp: props['timestamp'] ?? '',
+          fuente: fuente,
           provincia: props['provincia'] ?? 'Panamá',
           distrito: props['distrito'] ?? '',
           corregimiento: props['corregimiento'] ?? '',
@@ -736,24 +742,27 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                                         spacing: 6,
                                         runSpacing: 6,
                                         children: [
-                                          _buildSystemBadge(
-                                            label: item.isSynced ? AppMessages.current.badgeReportApp : AppMessages.current.badgeReportAppLocal,
-                                            icon: item.isSynced ? Icons.cloud_done : Icons.phone_android,
-                                            active: true,
-                                            color: item.isSynced ? Colors.teal : Colors.amber.shade800,
-                                          ),
-                                          _buildSystemBadge(
-                                            label: AppMessages.current.badgeSinaproc,
-                                            icon: Icons.shield,
-                                            active: item.sistemasVinculados.contains('SINAPROC'),
-                                            color: Colors.orange.shade800,
-                                          ),
-                                          _buildSystemBadge(
-                                            label: AppMessages.current.badgeMiviot,
-                                            icon: Icons.domain,
-                                            active: item.sistemasVinculados.contains('MIVIOT'),
-                                            color: Colors.indigo.shade700,
-                                          ),
+                                          if (item.fuente == 'SINAPROC')
+                                            _buildSystemBadge(
+                                              label: AppMessages.current.badgeSinaprocEdan,
+                                              icon: Icons.shield,
+                                              active: true,
+                                              color: Colors.orange.shade800,
+                                            )
+                                          else
+                                            _buildSystemBadge(
+                                              label: item.isSynced ? AppMessages.current.badgeReportApp : AppMessages.current.badgeReportAppLocal,
+                                              icon: item.isSynced ? Icons.cloud_done : Icons.phone_android,
+                                              active: true,
+                                              color: item.isSynced ? Colors.teal : Colors.amber.shade800,
+                                            ),
+                                          if (item.sistemasVinculados.contains('MIVIOT'))
+                                            _buildSystemBadge(
+                                              label: AppMessages.current.badgeMiviot,
+                                              icon: Icons.home_work,
+                                              active: true,
+                                              color: Colors.green.shade800,
+                                            ),
                                           if (item.isMyReport)
                                             _buildSystemBadge(
                                               label: AppMessages.current.badgeMine,
@@ -761,6 +770,26 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                                               active: true,
                                               color: Colors.blue.shade700,
                                             ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        children: [
+                                          OutlinedButton.icon(
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: Colors.green.shade900,
+                                              side: BorderSide(color: Colors.green.shade700),
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              visualDensity: VisualDensity.compact,
+                                            ),
+                                            icon: const Icon(Icons.home_work, size: 14),
+                                            label: Text(
+                                              AppMessages.current.miviotConsultingBtn,
+                                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                            ),
+                                            onPressed: () => _mostrarDialogoMiviot(item),
+                                          ),
                                         ],
                                       ),
                                     ],
@@ -772,6 +801,72 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                         },
                       ),
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _mostrarDialogoMiviot(ReportViewModel item) {
+    String cedulaInicial = '';
+    if (item.isMyReport && item.fullReport?.documentoNumero != null) {
+      cedulaInicial = item.fullReport!.documentoNumero!;
+    } else if (_myProfile != null && _myProfile!.cedula.isNotEmpty) {
+      cedulaInicial = _myProfile!.cedula;
+    }
+
+    if (cedulaInicial.isNotEmpty) {
+      MiviotTramiteDialog.show(context, cedula: cedulaInicial);
+      return;
+    }
+
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.home_work, color: Colors.green.shade800),
+            const SizedBox(width: 8),
+            const Text('Consultar Trámite MIVIOT', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ingresa tu número de cédula para consultar el avance del expediente oficial en MIVIOT (Fases 1 a 5):',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Cédula Panameña',
+                hintText: 'Ej. 7-71-1473',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.credit_card),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(AppMessages.current.cancel),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade800, foregroundColor: Colors.white),
+            onPressed: () {
+              final val = ctrl.text.trim();
+              if (val.isNotEmpty) {
+                Navigator.of(ctx).pop();
+                MiviotTramiteDialog.show(context, cedula: val);
+              }
+            },
+            child: Text(AppMessages.current.accept),
           ),
         ],
       ),

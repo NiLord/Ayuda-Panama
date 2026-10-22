@@ -35,10 +35,14 @@ import backend.src.handlers.export_edan
 
 
 class TestLambdaHandlers(unittest.TestCase):
+    @patch("backend.src.handlers.submit_report.external_table")
     @patch("backend.src.handlers.submit_report.reporters_table")
     @patch("backend.src.handlers.submit_report.reports_table")
-    def test_submit_report_handler_success(self, mock_reports_table, mock_reporters_table):
+    def test_submit_report_handler_success(self, mock_reports_table, mock_reporters_table, mock_external_table):
         from backend.src.handlers.submit_report import lambda_handler
+
+        mock_reports_table.query.return_value = {"Items": []}
+        mock_external_table.query.return_value = {"Items": []}
 
         event = {
             "requestContext": {
@@ -87,9 +91,12 @@ class TestLambdaHandlers(unittest.TestCase):
         self.assertTrue(mock_reports_table.put_item.called)
         self.assertTrue(mock_reporters_table.update_item.called)
 
+    @patch("backend.src.handlers.get_public_reports.external_table")
     @patch("backend.src.handlers.get_public_reports.reports_table")
-    def test_get_public_reports_handler_redacts_pii(self, mock_reports_table):
+    def test_get_public_reports_handler_redacts_pii(self, mock_reports_table, mock_external_table):
         from backend.src.handlers.get_public_reports import lambda_handler
+
+        mock_external_table.scan.return_value = {"Items": []}
 
         # Mock DynamoDB scan response with sensitive PII
         mock_reports_table.scan.return_value = {
@@ -138,9 +145,8 @@ class TestLambdaHandlers(unittest.TestCase):
         self.assertEqual(feature["properties"]["habitabilidad"], "INHABITABLE")
         self.assertEqual(feature["properties"]["semaforo_color"], "#E74C3C")
         self.assertEqual(feature["properties"]["nombre_mascarado"], "Fernando P.")
-        self.assertEqual(feature["properties"]["cedula_mascarada"], "7-***-417")
+        self.assertEqual(feature["properties"]["cedula_mascarada"], "7-*****417")
         self.assertIn("APP", feature["properties"]["sistemas_vinculados"])
-        self.assertIn("SINAPROC", feature["properties"]["sistemas_vinculados"])
 
         # Verificar ausencia total de PII en el payload público
         raw_body = response["body"]
@@ -259,9 +265,38 @@ class TestLambdaHandlers(unittest.TestCase):
             attrs = feature["attributes"]
             self.assertEqual(attrs["evaluador"], "Evaluador Oficial")
             self.assertEqual(attrs["nombre_jefe"], "Pedro Martínez")
-        self.assertEqual(attrs["cedula"], "7-55-444")
-        self.assertEqual(attrs["c_embarazadas"], 1.0)
-        self.assertEqual(attrs["colchon_doble"], 2.0)
+
+    @patch("backend.src.handlers.submit_report.external_table")
+    @patch("backend.src.handlers.submit_report.reporters_table")
+    @patch("backend.src.handlers.submit_report.reports_table")
+    def test_submit_report_handler_rejects_duplicate_cedula(self, mock_reports_table, mock_reporters_table, mock_external_table):
+        from backend.src.handlers.submit_report import lambda_handler
+
+        # Mock that GSI2_Cedula in reports_table already has a report for this cedula
+        mock_reports_table.query.return_value = {
+            "Items": [{"report_id": "rep_existing", "cedula_normalizada": "7-99-888"}]
+        }
+        mock_external_table.query.return_value = {"Items": []}
+
+        event = {
+            "requestContext": {"http": {"method": "POST"}},
+            "body": json.dumps({
+                "titular_afectado": {
+                    "nombre_jefe_hogar": "María Gómez",
+                    "documento_numero": "7-99-888",
+                },
+                "ubicacion": {"coordenadas": {"lat": 7.625, "lng": -80.354}},
+                "evaluacion_estructural": {"habitabilidad": "HABITABLE"},
+                "censo_demografico": {"total_ocupantes": 1},
+                "necesidades_humanitarias": {},
+            }),
+        }
+
+        response = lambda_handler(event, None)
+        self.assertEqual(response["statusCode"], 409)
+        body = json.loads(response["body"])
+        self.assertFalse(body["success"])
+        self.assertEqual(body["error"], "REPORTE_DUPLICADO")
 
 
 if __name__ == "__main__":

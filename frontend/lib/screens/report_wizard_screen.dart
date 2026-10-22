@@ -6,12 +6,15 @@ import 'package:uuid/uuid.dart';
 import '../config/app_config.dart';
 import '../l10n/app_messages.dart';
 import '../models/disaster_report.dart';
+import '../models/duplicate_check_result.dart';
+import '../services/duplicate_check_service.dart';
 import '../services/offline_queue_service.dart';
 import '../services/panama_dpa_service.dart';
 import '../services/postal_code_service.dart';
 import '../services/reporter_profile_service.dart';
 import '../services/telemetry_service.dart';
 import '../utils/panama_text_normalizer.dart';
+import '../widgets/miviot_tramite_dialog.dart';
 
 class ReportWizardScreen extends StatefulWidget {
   final DisasterReport? initialReport;
@@ -90,6 +93,39 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   final _afectadoCedulaCtrl = TextEditingController();
   final _afectadoTelefonoCtrl = TextEditingController();
   bool _consentimientoDado = true;
+
+  // Validación y Bloqueo de Cédula Duplicada
+  bool _verificandoCedula = false;
+  DuplicateCheckResult? _duplicadoResult;
+  Timer? _cedulaDebounceTimer;
+
+  void _onCedulaChanged(String val) {
+    _cedulaDebounceTimer?.cancel();
+    if (val.trim().length < 5) {
+      if (mounted) {
+        setState(() {
+          _duplicadoResult = null;
+          _verificandoCedula = false;
+        });
+      }
+      return;
+    }
+    _cedulaDebounceTimer = Timer(const Duration(milliseconds: 600), () {
+      _verificarDuplicado(val.trim());
+    });
+  }
+
+  Future<void> _verificarDuplicado(String cedula) async {
+    if (!mounted) return;
+    setState(() => _verificandoCedula = true);
+    final result = await DuplicateCheckService.verificarCedula(cedula);
+    if (mounted) {
+      setState(() {
+        _duplicadoResult = result;
+        _verificandoCedula = false;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -232,6 +268,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
 
   @override
   void dispose() {
+    _cedulaDebounceTimer?.cancel();
     _comunidadCtrl.dispose();
     _calleCtrl.dispose();
     _referenciaCtrl.dispose();
@@ -728,6 +765,18 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
               );
               return;
             }
+
+            // Validar bloqueo estricto si hay reporte duplicado
+            if (_duplicadoResult != null && _duplicadoResult!.existeDuplicado) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(_duplicadoResult!.mensaje),
+                  backgroundColor: Colors.red.shade900,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+              return;
+            }
           } else if (_currentStep == 1) {
             // Validar Sitio
             if (_comunidadCtrl.text.trim().isEmpty) {
@@ -786,6 +835,10 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
         },
         controlsBuilder: (context, details) {
           final isLast = _currentStep == 3;
+          final bool isDuplicateBlocked = _currentStep == 0 &&
+              _duplicadoResult != null &&
+              _duplicadoResult!.existeDuplicado;
+
           return Padding(
             padding: const EdgeInsets.only(top: 20),
             child: Row(
@@ -812,9 +865,15 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 // Botón SIGUIENTE o FINALIZAR a la DERECHA
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _enviando ? null : details.onStepContinue,
+                    onPressed: (_enviando || isDuplicateBlocked || _verificandoCedula)
+                        ? null
+                        : details.onStepContinue,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isLast ? Colors.green.shade700 : Colors.red.shade800,
+                      backgroundColor: isDuplicateBlocked
+                          ? Colors.grey.shade400
+                          : isLast
+                              ? Colors.green.shade700
+                              : Colors.red.shade800,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
@@ -824,7 +883,22 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                             height: 20,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                           )
-                        : Text(isLast ? (widget.initialReport != null ? msg.updateAndSend : msg.finishAndSend) : msg.next),
+                        : _verificandoCedula
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(msg.duplicateCheckingCedula, style: const TextStyle(fontSize: 12)),
+                                ],
+                              )
+                            : isDuplicateBlocked
+                                ? Text(msg.duplicateBlockAction)
+                                : Text(isLast ? (widget.initialReport != null ? msg.updateAndSend : msg.finishAndSend) : msg.next),
                   ),
                 ),
               ],
@@ -854,10 +928,13 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                         _afectadoNombreCtrl.text = _reporterProfile!.nombre;
                         _afectadoCedulaCtrl.text = _reporterProfile!.cedula;
                         _afectadoTelefonoCtrl.text = _reporterProfile!.telefono;
+                        _onCedulaChanged(_reporterProfile!.cedula);
                       } else if (!_esElMismoInformante) {
                         _afectadoNombreCtrl.clear();
                         _afectadoCedulaCtrl.clear();
                         _afectadoTelefonoCtrl.clear();
+                        _duplicadoResult = null;
+                        _verificandoCedula = false;
                       }
                     });
                   },
@@ -875,13 +952,111 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _afectadoCedulaCtrl,
+                  onChanged: _onCedulaChanged,
                   decoration: InputDecoration(
                     labelText: msg.titularCedulaLabel,
                     helperText: msg.titularCedulaHelper,
                     prefixIcon: const Icon(Icons.credit_card),
+                    suffixIcon: _verificandoCedula
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : (_duplicadoResult != null && _duplicadoResult!.existeDuplicado)
+                            ? const Icon(Icons.error, color: Colors.red)
+                            : null,
                     border: const OutlineInputBorder(),
                   ),
                 ),
+
+                // Alerta Bloqueante en caso de Cédula / Vivienda Duplicada
+                if (_duplicadoResult != null && _duplicadoResult!.existeDuplicado) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade700, width: 2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.block, color: Colors.red.shade900, size: 22),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                msg.duplicateDetectedTitle,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red.shade900,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          msg.duplicateDetectedBody(_duplicadoResult!.sistemas.join(', ')),
+                          style: TextStyle(fontSize: 12, color: Colors.red.shade900),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          children: [
+                            if (_duplicadoResult!.sistemas.contains('SINAPROC'))
+                              Chip(
+                                label: Text(msg.badgeSinaprocEdan, style: const TextStyle(fontSize: 11, color: Colors.white)),
+                                backgroundColor: Colors.orange.shade800,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            if (_duplicadoResult!.sistemas.contains('MIVIOT'))
+                              Chip(
+                                label: Text(msg.badgeMiviot, style: const TextStyle(fontSize: 11, color: Colors.white)),
+                                backgroundColor: Colors.green.shade800,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            if (_duplicadoResult!.sistemas.contains('APP'))
+                              Chip(
+                                label: Text(msg.badgeReportApp, style: const TextStyle(fontSize: 11, color: Colors.white)),
+                                backgroundColor: Colors.blue.shade800,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                          ],
+                        ),
+                        if (_duplicadoResult!.tramiteMiviot != null) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                msg.miviotReportNumber(_duplicadoResult!.tramiteMiviot!['reporte']?.toString() ?? ''),
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green.shade900),
+                              ),
+                              TextButton.icon(
+                                onPressed: () {
+                                  MiviotTramiteDialog.show(
+                                    context,
+                                    cedula: _duplicadoResult!.cedula,
+                                  );
+                                },
+                                icon: const Icon(Icons.open_in_new, size: 14),
+                                label: Text(msg.duplicateViewTramite, style: const TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _afectadoTelefonoCtrl,
