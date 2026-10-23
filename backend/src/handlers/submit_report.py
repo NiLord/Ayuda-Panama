@@ -29,6 +29,7 @@ from ..models.disaster_assessment import (
     SistemaConstructivo,
 )
 from ..utils.cedula_normalizer import normalize_cedula, mask_cedula
+from ..utils.notifier import send_alert
 from boto3.dynamodb.conditions import Key
 
 REPORTS_TABLE_NAME = os.environ.get("REPORTS_TABLE_NAME", "lse-reports-table")
@@ -291,6 +292,12 @@ def lambda_handler(event: dict, context) -> dict:
 
     except Exception as e:
         print(f"Error procesando reporte: {e}")
+        send_alert(
+            f"🚨 *ERROR en Submit Report*\n"
+            f"• *Función:* `lse-submit-report`\n"
+            f"• *Error:* `{str(e)}`\n"
+            f"• *Timestamp:* `{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}`"
+        )
         return build_response(500, {
             "success": False,
             "error": str(e),

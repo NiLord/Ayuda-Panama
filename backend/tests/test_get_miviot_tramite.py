@@ -39,6 +39,7 @@ class TestGetMiviotTramite(unittest.TestCase):
 
     @patch.object(handler, "miviot_table")
     def test_get_miviot_tramite_cached_fresh(self, mock_miviot):
+        from datetime import datetime, timezone
         mock_miviot.get_item.return_value = {
             "Item": {
                 "PK": "CEDULA#7-71-1473",
@@ -47,7 +48,7 @@ class TestGetMiviotTramite(unittest.TestCase):
                 "fecha_recibido": "12/10/2026",
                 "paso_actual": 2,
                 "estado_actual": "Evaluación Técnica en Sitio",
-                "ultima_actualizacion": "2026-10-22T10:00:00+00:00",
+                "ultima_actualizacion": datetime.now(timezone.utc).isoformat(),
             }
         }
 

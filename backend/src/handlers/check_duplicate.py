@@ -20,6 +20,7 @@ from ..utils.geo_normalizer import (
     homologar_evaluador,
 )
 from ..adapters.miviot_adapter import MiviotAdapter
+from ..utils.notifier import send_alert
 
 logger = logging.getLogger(__name__)
 
@@ -274,6 +275,12 @@ def lambda_handler(event: dict, context) -> dict:
 
     except Exception as e:
         logger.exception("Error en check_duplicate: %s", str(e))
+        send_alert(
+            f"🚨 *ERROR en Check Duplicate*\n"
+            f"• *Función:* `lse-check-duplicate`\n"
+            f"• *Error:* `{str(e)}`\n"
+            f"• *Timestamp:* `{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}`"
+        )
         return build_response(500, {
             "success": False,
             "error": "INTERNAL_ERROR",

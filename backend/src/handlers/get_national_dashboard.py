@@ -16,6 +16,7 @@ from ..adapters.sinaproc_sync import (
     save_national_dashboard,
     DEFAULT_FEATURE_SERVER_URL,
 )
+from ..utils.notifier import send_alert
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,11 @@ def lambda_handler(event: dict, context) -> dict:
 
     except Exception as e:
         logger.exception("Error recuperando dashboard nacional: %s", str(e))
+        send_alert(
+            f"🚨 *ERROR en National Dashboard*\n"
+            f"• *Función:* `lse-national-dashboard`\n"
+            f"• *Error:* `{str(e)}`\n"
+        )
         return build_response(500, {
             "success": False,
             "error": "DASHBOARD_ERROR",

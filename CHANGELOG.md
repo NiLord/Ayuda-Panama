@@ -5,6 +5,45 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
+## [1.2.1] - 2026-10-23
+
+### Added
+- **Módulo Agnóstico de Alertas y Notificaciones SQS (`send_alert`)**:
+  - Nuevo módulo utilitario `backend/src/utils/notifier.py` para publicación de eventos y errores en colas SQS.
+  - Resolución determinista bidireccional (soporta ARN o URL directa de SQS).
+  - Integración en `lse-sync-sinaproc`:
+    - Notificación de sincronización exitosa con conteo de registros inyectados, indexados y modo de ejecución (Full/Delta).
+    - Reporte automático de excepciones no controladas.
+  - Integración de reporte de excepciones no controladas en `submit_report`, `check_duplicate` y `national_dashboard`.
+  - Configuración dinámica en CloudFormation mediante parámetro único `AlertsQueueArn` y política condicional IAM `SqsAlertsPublishPolicy` (sin valores ni cuentas fijas quemadas).
+
+### Changed
+- **Optimización de Memoria en AWS Lambdas (Cost & Compute Right-Sizing)**:
+  - Análisis empírico de consumo real en CloudWatch Logs Insights (perfil `personal`):
+    - `lse-submit-report-prod`: Reducido de 256 MB a **128 MB** (pico real 95 MB, 50% ahorro).
+    - `lse-get-upload-presign-prod`: Reducido de 256 MB a **128 MB** (pico real 96 MB, 50% ahorro).
+    - `lse-check-duplicate-prod`: Reducido de 256 MB a **128 MB** (pico real 103 MB, 50% ahorro).
+    - `lse-national-dashboard-prod`: Reducido de 256 MB a **128 MB** (pico real 104 MB, 50% ahorro).
+    - `lse-get-miviot-tramite-prod`: Reducido de 256 MB a **160 MB** (pico real 105 MB, 37.5% ahorro, con margen para parsing HTML).
+    - `lse-sync-sinaproc-prod`: Reducido de 512 MB a **256 MB** (pico real 206 MB en ingesta masiva de 5K+ registros, 50% ahorro).
+    - `lse-authorizer-prod`: Mantenido en **128 MB** (mínimo absoluto de AWS Lambda, pico real 42 MB).
+
+## [1.2.0] - 2026-10-22
+
+### Added
+- **Dashboard de Estadísticas Nacionales**:
+  - Nuevo handler `lse-national-dashboard-prod` para lectura instantánea O(1) de totales nacionales, censo demográfico y severidad habitacional por provincia/distrito.
+  - Sincronizador de SINAPROC con filtro oficial de evento (`f_h_registro >= '2026-10-09'`), homologando con precisión los totales oficiales.
+- **Mejoras UX/UI en Flutter**:
+  - Pantalla de consulta ciudadana con campo de cédula en blanco por defecto y ocultamiento automático de teclado al consultar.
+  - Validación de cédula en reporte mediante evento `out-of-focus` para optimizar llamados a la red.
+  - Footer fijo para fecha de última actualización en estadísticas nacionales.
+  - Carga automática de perfil existente al editar desde el icono superior.
+  - Tarjeta de bienvenida en pantalla de inicio.
+
+### Security
+- Erradicación total de credenciales y endpoints en código estático; inyección de credenciales estrictamente en tiempo de compilación con `--dart-define`.
+
 ## [1.1.0] - 2026-10-22
 
 ### Added

@@ -20,6 +20,14 @@ Parameters:
     NoEcho: true
     Description: Secreto de verificación de integridad para peticiones de Ayuda Panamá.
 
+  AlertsQueueArn:
+    Type: String
+    Default: ""
+    Description: ARN opcional de la cola SQS de alertas. Si se provee, se configuran permisos dinámicos en IAM y se habilita el envío de alertas.
+
+Conditions:
+  HasAlertsQueue: !Not [!Equals [!Ref AlertsQueueArn, ""]]
+
 Resources:
   # ============================================================================
   # ALMACENAMIENTO DE DATOS (DYNAMODB)
@@ -216,6 +224,17 @@ Resources:
                   - s3:PutObject
                   - s3:GetObject
                 Resource: !Sub ${EvidenceBucket.Arn}/*
+        - !If
+          - HasAlertsQueue
+          - PolicyName: SqsAlertsPublishPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - sqs:SendMessage
+                  Resource: !Ref AlertsQueueArn
+          - !Ref AWS::NoValue
 
   # ============================================================================
   # API GATEWAY (HTTP API V2)
@@ -271,12 +290,13 @@ Resources:
       Handler: backend.src.handlers.submit_report.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 15
-      MemorySize: 256
+      MemorySize: 128
       Environment:
         Variables:
           REPORTS_TABLE_NAME: !Ref ReportsTable
           REPORTERS_TABLE_NAME: !Ref ReportersTable
           EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
+          ALERTS_QUEUE: !Ref AlertsQueueArn
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -290,11 +310,12 @@ Resources:
       Handler: backend.src.handlers.get_national_dashboard.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 15
-      MemorySize: 256
+      MemorySize: 128
       Environment:
         Variables:
           EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
           REPORTS_TABLE_NAME: !Ref ReportsTable
+          ALERTS_QUEUE: !Ref AlertsQueueArn
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -308,12 +329,13 @@ Resources:
       Handler: backend.src.handlers.check_duplicate.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 15
-      MemorySize: 256
+      MemorySize: 128
       Environment:
         Variables:
           REPORTS_TABLE_NAME: !Ref ReportsTable
           EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
           MIVIOT_TRAMITES_TABLE_NAME: !Ref MiviotTramitesTable
+          ALERTS_QUEUE: !Ref AlertsQueueArn
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -327,7 +349,7 @@ Resources:
       Handler: backend.src.handlers.get_miviot_tramite.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 15
-      MemorySize: 256
+      MemorySize: 160
       Environment:
         Variables:
           MIVIOT_TRAMITES_TABLE_NAME: !Ref MiviotTramitesTable
@@ -344,11 +366,12 @@ Resources:
       Handler: backend.src.handlers.sync_sinaproc.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300
-      MemorySize: 512
+      MemorySize: 256
       Environment:
         Variables:
           EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
           REPORTS_TABLE_NAME: !Ref ReportsTable
+          ALERTS_QUEUE: !Ref AlertsQueueArn
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -382,7 +405,7 @@ Resources:
       Handler: backend.src.handlers.get_presigned_url.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 10
-      MemorySize: 256
+      MemorySize: 128
       Environment:
         Variables:
           EVIDENCE_BUCKET_NAME: !Ref EvidenceBucket

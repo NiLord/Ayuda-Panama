@@ -120,6 +120,7 @@ jobs:
 
       - name: Desplegar CloudFormation Stack
         run: |
+          ALERTS_QUEUE_ARN="${{ vars.ALERTS_QUEUE_ARN || secrets.ALERTS_QUEUE_ARN || '' }}"
           aws cloudformation deploy \
             --template-file infra/cloudformation.yaml \
             --stack-name "${STACK_NAME}" \
@@ -127,7 +128,7 @@ jobs:
                 Environment="${ENVIRONMENT}" \
                 AppApiKey="${{ steps.resolve-secrets.outputs.app_api_key }}" \
                 AppApiSecret="${{ steps.resolve-secrets.outputs.app_api_secret }}" \
-                AdminSecretKey="${{ steps.resolve-secrets.outputs.admin_secret_key }}" \
+                AlertsQueueArn="${ALERTS_QUEUE_ARN}" \
             --capabilities CAPABILITY_NAMED_IAM \
             --region "${AWS_REGION}"
 
