@@ -10,11 +10,6 @@ Parameters:
     AllowedValues: [dev, staging, prod]
     Description: Ambiente de despliegue.
 
-  AdminSecretKey:
-    Type: String
-    NoEcho: true
-    Description: Clave de autenticación para acceso de autoridades (SINAPROC / Cruz Roja) al endpoint de exportación con PII.
-
   AppApiKey:
     Type: String
     NoEcho: true
@@ -43,6 +38,10 @@ Resources:
           AttributeType: S
         - AttributeName: GSI1SK
           AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSI2SK
+          AttributeType: S
       KeySchema:
         - AttributeName: PK
           KeyType: HASH
@@ -54,6 +53,14 @@ Resources:
             - AttributeName: GSI1PK
               KeyType: HASH
             - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2_Cedula
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSI2SK
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
@@ -77,6 +84,66 @@ Resources:
           KeyType: HASH
         - AttributeName: SK
           KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+
+  ExternalReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub lse-external-reports-table-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI_CedulaPK
+          AttributeType: S
+        - AttributeName: GSI_CedulaSK
+          AttributeType: S
+        - AttributeName: GSI_UbicacionPK
+          AttributeType: S
+        - AttributeName: GSI_UbicacionSK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI_Cedula
+          KeySchema:
+            - AttributeName: GSI_CedulaPK
+              KeyType: HASH
+            - AttributeName: GSI_CedulaSK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI_Ubicacion
+          KeySchema:
+            - AttributeName: GSI_UbicacionPK
+              KeyType: HASH
+            - AttributeName: GSI_UbicacionSK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+
+  MiviotTramitesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub lse-miviot-tramites-table-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl_expiration
+        Enabled: true
       SSESpecification:
         SSEEnabled: true
 
@@ -131,10 +198,15 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:Query
                   - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:BatchGetItem
                 Resource:
                   - !GetAtt ReportsTable.Arn
                   - !Sub ${ReportsTable.Arn}/index/*
                   - !GetAtt ReportersTable.Arn
+                  - !GetAtt ExternalReportsTable.Arn
+                  - !Sub ${ExternalReportsTable.Arn}/index/*
+                  - !GetAtt MiviotTramitesTable.Arn
         - PolicyName: S3EvidenceAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -204,27 +276,103 @@ Resources:
         Variables:
           REPORTS_TABLE_NAME: !Ref ReportsTable
           REPORTERS_TABLE_NAME: !Ref ReportersTable
+          EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):
               return {"statusCode": 200, "body": "Placeholder para despliegue inicial"}
 
-  GetPublicReportsFunction:
+  NationalDashboardFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub lse-get-public-reports-${Environment}
+      FunctionName: !Sub lse-national-dashboard-${Environment}
       Runtime: python3.13
-      Handler: backend.src.handlers.get_public_reports.lambda_handler
+      Handler: backend.src.handlers.get_national_dashboard.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
+          REPORTS_TABLE_NAME: !Ref ReportsTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "{}"}
+
+  CheckDuplicateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-check-duplicate-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.check_duplicate.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 15
       MemorySize: 256
       Environment:
         Variables:
           REPORTS_TABLE_NAME: !Ref ReportsTable
+          EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
+          MIVIOT_TRAMITES_TABLE_NAME: !Ref MiviotTramitesTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):
-              return {"statusCode": 200, "body": '{"type":"FeatureCollection","features":[]}'}
+              return {"statusCode": 200, "body": "{}"}
+
+  GetMiviotTramiteFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-get-miviot-tramite-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.get_miviot_tramite.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          MIVIOT_TRAMITES_TABLE_NAME: !Ref MiviotTramitesTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "{}"}
+
+  SyncSinaprocFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub lse-sync-sinaproc-${Environment}
+      Runtime: python3.13
+      Handler: backend.src.handlers.sync_sinaproc.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
+          REPORTS_TABLE_NAME: !Ref ReportsTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "{}"}
+
+  # Regla EventBridge programada para sincronización periódica de SINAPROC
+  SinaprocSyncSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub lse-sinaproc-sync-schedule-${Environment}
+      Description: Dispara la sincronización periódica de registros EDAN desde el FeatureServer de SINAPROC
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SyncSinaprocFunction.Arn
+          Id: SyncSinaprocScheduleTarget
+
+  SinaprocSyncSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SyncSinaprocFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt SinaprocSyncSchedule.Arn
 
   GetPresignedUrlFunction:
     Type: AWS::Lambda::Function
@@ -238,24 +386,6 @@ Resources:
       Environment:
         Variables:
           EVIDENCE_BUCKET_NAME: !Ref EvidenceBucket
-      Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              return {"statusCode": 200, "body": "{}"}
-
-  ExportEdanFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub lse-export-edan-${Environment}
-      Runtime: python3.13
-      Handler: backend.src.handlers.export_edan.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 30
-      MemorySize: 512
-      Environment:
-        Variables:
-          REPORTS_TABLE_NAME: !Ref ReportsTable
-          ADMIN_SECRET_KEY: !Ref AdminSecretKey
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -364,22 +494,22 @@ Resources:
       AuthorizerId: !Ref HttpApiAuthorizer
       Target: !Sub integrations/${SubmitIntegration}
 
-  PublicIntegration:
+  NationalDashboardIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref HttpApi
       IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt GetPublicReportsFunction.Arn
+      IntegrationUri: !GetAtt NationalDashboardFunction.Arn
       PayloadFormatVersion: '2.0'
 
-  PublicRoute:
+  NationalDashboardRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
-      RouteKey: GET /api/v1/reports/public
+      RouteKey: GET /api/v1/dashboard/national
       AuthorizationType: CUSTOM
       AuthorizerId: !Ref HttpApiAuthorizer
-      Target: !Sub integrations/${PublicIntegration}
+      Target: !Sub integrations/${NationalDashboardIntegration}
 
   PresignIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -398,20 +528,39 @@ Resources:
       AuthorizerId: !Ref HttpApiAuthorizer
       Target: !Sub integrations/${PresignIntegration}
 
-  ExportIntegration:
+  CheckDuplicateIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref HttpApi
       IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt ExportEdanFunction.Arn
+      IntegrationUri: !GetAtt CheckDuplicateFunction.Arn
       PayloadFormatVersion: '2.0'
 
-  ExportRoute:
+  CheckDuplicateRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
-      RouteKey: GET /api/v1/reports/export
-      Target: !Sub integrations/${ExportIntegration}
+      RouteKey: POST /api/v1/reports/check-duplicate
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref HttpApiAuthorizer
+      Target: !Sub integrations/${CheckDuplicateIntegration}
+
+  MiviotTramiteIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetMiviotTramiteFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  MiviotTramiteRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /api/v1/tramites/miviot
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref HttpApiAuthorizer
+      Target: !Sub integrations/${MiviotTramiteIntegration}
 
   # Permisos para que API Gateway invoque las Lambdas
   SubmitPermission:
@@ -422,10 +571,26 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
 
-  PublicPermission:
+  NationalDashboardPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref GetPublicReportsFunction
+      FunctionName: !Ref NationalDashboardFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  CheckDuplicatePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CheckDuplicateFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  MiviotTramitePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetMiviotTramiteFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
@@ -434,14 +599,6 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref GetPresignedUrlFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
-
-  ExportPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref ExportEdanFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
@@ -461,6 +618,14 @@ Outputs:
   ReportersTableName:
     Description: Nombre de la tabla DynamoDB de informantes
     Value: !Ref ReportersTable
+
+  ExternalReportsTableName:
+    Description: Nombre de la tabla DynamoDB de reportes externos (SINAPROC EDAN)
+    Value: !Ref ExternalReportsTable
+
+  MiviotTramitesTableName:
+    Description: Nombre de la tabla DynamoDB de trámites MIVIOT
+    Value: !Ref MiviotTramitesTable
 
   EvidenceBucketName:
     Description: Nombre del bucket S3 para fotos de evidencia

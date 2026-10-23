@@ -1,7 +1,9 @@
 {
   "environment": "prod",
-  "apiBaseUrl": "https://ayudapanama-api.fernandogonzalez.dev",
-  "httpApiRawEndpoint": "https://0eysuwe15b.execute-api.us-east-1.amazonaws.com",
+  "apiBaseUrl": "",
+  "httpApiRawEndpoint": "",
+  "apiKey": "",
+  "apiSecret": "",
   "postalCodeServiceUrl": "https://codigospostalespanama.gob.pa/api/location",
   "defaultEventCode": "SISMO_OCTUBRE_2026",
   "events": [

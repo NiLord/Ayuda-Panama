@@ -233,6 +233,26 @@ class AppMessages {
   String get hazardCollapse => tr('hazard_collapse');
   String get hazardShelter => tr('hazard_shelter');
 
+  String get duplicateCheckingCedula => tr('duplicate_checking_cedula');
+  String get duplicateDetectedTitle => tr('duplicate_detected_title');
+  String duplicateDetectedBody(String systems) =>
+      tr('duplicate_detected_body', args: {'systems': systems});
+  String get duplicateBlockAction => tr('duplicate_block_action');
+  String get duplicateViewTramite => tr('duplicate_view_tramite');
+  String get duplicateReenterCedula => tr('duplicate_reenter_cedula');
+
+  String get miviotDialogTitle => tr('miviot_dialog_title');
+  String miviotReportNumber(String number) =>
+      tr('miviot_report_number', args: {'number': number});
+  String miviotDateReceived(String date) =>
+      tr('miviot_date_received', args: {'date': date});
+  String miviotStepProgress(int current, String status) =>
+      tr('miviot_step_progress', args: {'current': current, 'status': status});
+  String get miviotNoTramite => tr('miviot_no_tramite');
+  String get miviotConsultingBtn => tr('miviot_consulting_btn');
+  String get miviotRefreshBtn => tr('miviot_refresh_btn');
+  String get badgeSinaprocEdan => tr('badge_sinaproc_edan');
+
   /// Fallback integrado para garantizar respuestas seguras si el asset aún no carga
   static final Map<String, String> _defaultFallback = {
     'app_title': 'Ayuda Panamá',
@@ -382,5 +402,19 @@ class AppMessages {
     'damage_habitability': 'Daño: {habitability}',
     'hazard_collapse': '⚠️ Colapso',
     'hazard_shelter': '⛺ Albergue',
+    'duplicate_checking_cedula': 'Verificando en registros oficiales...',
+    'duplicate_detected_title': 'Vivienda ya Evaluada / Trámite Oficial',
+    'duplicate_detected_body': 'Esta cédula ya cuenta con una evaluación o trámite en: {systems}. Por normativa de emergencia y para no duplicar recursos de auxilio, no se permite ingresar un nuevo reporte para esta vivienda.',
+    'duplicate_block_action': 'Reporte Duplicado Bloqueado',
+    'duplicate_view_tramite': 'Ver Trámite MIVIOT',
+    'duplicate_reenter_cedula': 'Corregir Cédula',
+    'miviot_dialog_title': 'Expediente de Vivienda MIVIOT',
+    'miviot_report_number': 'Expediente: {number}',
+    'miviot_date_received': 'Recibido: {date}',
+    'miviot_step_progress': 'Fase {current} de 5: {status}',
+    'miviot_no_tramite': 'No se localizó trámite de vivienda activo para esta cédula en MIVIOT.',
+    'miviot_consulting_btn': 'Consultar MIVIOT',
+    'miviot_refresh_btn': 'Actualizar MIVIOT',
+    'badge_sinaproc_edan': 'SINAPROC EDAN',
   };
 }

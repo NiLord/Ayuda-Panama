@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../l10n/app_messages.dart';
 import '../services/offline_queue_service.dart';
 import '../services/reporter_profile_service.dart';
+import 'citizen_query_screen.dart';
+import 'national_dashboard_screen.dart';
 import 'onboarding_profile_screen.dart';
-import 'public_map_screen.dart';
 import 'report_wizard_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -90,30 +91,45 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Banner de Emergencia Sísmica
+            // Tarjeta de Bienvenida y Guía
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.red.shade50,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red.shade200),
+                border: Border.all(color: Colors.grey.shade300),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.red.shade800, size: 36),
-                  const SizedBox(width: 12),
-                  Expanded(
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.volunteer_activism_rounded, color: Colors.red.shade800, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          msg.homeEmergencyBannerTitle,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red),
+                          'Bienvenido a Ayuda Panamá',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 4),
                         Text(
-                          msg.homeEmergencyBannerSubtitle,
-                          style: const TextStyle(fontSize: 13, color: Colors.black87),
+                          'Plataforma ciudadana de asistencia y evaluación de daños. Consulta el estado de tu solicitud con tu cédula o registra un nuevo reporte de afectación.',
+                          style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.35),
                         ),
                       ],
                     ),
@@ -158,7 +174,42 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // Botón Principal: CREAR REPORTE DE EMERGENCIA
+            // Botón Principal Verde (De Primero): CONSULTA ESTADO DE MI SOLICITUD
+            ElevatedButton(
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CitizenQueryScreen()),
+                );
+                _actualizarEstado();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B5E20), // Verde oficial
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 4,
+              ),
+              child: const Column(
+                children: [
+                  Icon(Icons.assignment_turned_in_rounded, size: 36),
+                  SizedBox(height: 8),
+                  Text(
+                    'CONSULTA ESTADO DE MI SOLICITUD',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Búsqueda unificada en SINAPROC y MIVIOT por cédula',
+                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Botón Secundario Rojo: CREAR REPORTE DE EMERGENCIA
             ElevatedButton(
               onPressed: () async {
                 final isConfigured = await ReporterProfileService.isProfileConfigured();
@@ -202,11 +253,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Botón Secundario: VER SITUACIÓN NACIONAL
+            // Botón Secundario: ESTADÍSTICA NACIONAL
             OutlinedButton.icon(
               onPressed: () async {
                 await Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const PublicMapScreen()),
+                  MaterialPageRoute(builder: (_) => const NationalDashboardScreen()),
                 );
                 _actualizarEstado();
               },
@@ -215,9 +266,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 side: BorderSide(color: Colors.blueGrey.shade800, width: 2),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: Icon(Icons.public, color: Colors.blueGrey.shade900),
+              icon: Icon(Icons.analytics_rounded, color: Colors.blueGrey.shade900),
               label: Text(
-                msg.homeMonitoringBtn,
+                'ESTADÍSTICA NACIONAL',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.blueGrey.shade900),
               ),
             ),

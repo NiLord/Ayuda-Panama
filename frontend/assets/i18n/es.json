@@ -158,5 +158,21 @@
   "titular_info": "Titular: {name} • Cédula: {cedula}",
   "damage_habitability": "Daño: {habitability}",
   "hazard_collapse": "⚠️ Colapso",
-  "hazard_shelter": "⛺ Albergue"
+  "hazard_shelter": "⛺ Albergue",
+
+  "duplicate_checking_cedula": "Verificando en registros oficiales...",
+  "duplicate_detected_title": "Vivienda ya Evaluada / Trámite Oficial",
+  "duplicate_detected_body": "Esta cédula ya cuenta con una evaluación o trámite en: {systems}. Por normativa de emergencia y para no duplicar recursos de auxilio, no se permite ingresar un nuevo reporte para esta vivienda.",
+  "duplicate_block_action": "Reporte Duplicado Bloqueado",
+  "duplicate_view_tramite": "Ver Trámite MIVIOT",
+  "duplicate_reenter_cedula": "Corregir Cédula",
+
+  "miviot_dialog_title": "Expediente de Vivienda MIVIOT",
+  "miviot_report_number": "Expediente: {number}",
+  "miviot_date_received": "Recibido: {date}",
+  "miviot_step_progress": "Fase {current} de 5: {status}",
+  "miviot_no_tramite": "No se localizó trámite de vivienda activo para esta cédula en MIVIOT.",
+  "miviot_consulting_btn": "Consultar MIVIOT",
+  "miviot_refresh_btn": "Actualizar MIVIOT",
+  "badge_sinaproc_edan": "SINAPROC EDAN"
 }

@@ -28,13 +28,17 @@ from ..models.disaster_assessment import (
     TipoInmueble,
     SistemaConstructivo,
 )
+from ..utils.cedula_normalizer import normalize_cedula, mask_cedula
+from boto3.dynamodb.conditions import Key
 
 REPORTS_TABLE_NAME = os.environ.get("REPORTS_TABLE_NAME", "lse-reports-table")
 REPORTERS_TABLE_NAME = os.environ.get("REPORTERS_TABLE_NAME", "lse-reporters-table")
+EXTERNAL_REPORTS_TABLE_NAME = os.environ.get("EXTERNAL_REPORTS_TABLE_NAME", "lse-external-reports-table")
 
 dynamodb = boto3.resource("dynamodb")
 reports_table = dynamodb.Table(REPORTS_TABLE_NAME)
 reporters_table = dynamodb.Table(REPORTERS_TABLE_NAME)
+external_table = dynamodb.Table(EXTERNAL_REPORTS_TABLE_NAME)
 
 
 def build_response(status_code: int, body: dict) -> dict:
@@ -205,6 +209,45 @@ def lambda_handler(event: dict, context) -> dict:
             fotos_urls=fotos_urls,
         )
 
+        # Validación preventiva de no duplicidad por Cédula (Servidor)
+        norm_cedula = None
+        if titular.documento_numero and titular.documento_tipo == "CEDULA":
+            norm_cedula = normalize_cedula(titular.documento_numero)
+            if norm_cedula:
+                # 1. Validar en ReportsTable (App)
+                try:
+                    resp_dup = reports_table.query(
+                        IndexName="GSI2_Cedula",
+                        KeyConditionExpression=Key("GSI2PK").eq(f"CEDULA#{norm_cedula}"),
+                        Limit=1,
+                    )
+                    items_dup = resp_dup.get("Items", [])
+                    if isinstance(items_dup, list) and len(items_dup) > 0:
+                        return build_response(409, {
+                            "success": False,
+                            "error": "REPORTE_DUPLICADO",
+                            "mensaje": f"Ya existe un reporte registrado en el sistema para la cédula {mask_cedula(norm_cedula)}.",
+                        })
+                except Exception as e:
+                    print(f"Aviso: GSI2_Cedula query en ReportsTable omitido/error: {e}")
+
+                # 2. Validar en ExternalReportsTable (SINAPROC)
+                try:
+                    resp_ext = external_table.query(
+                        IndexName="GSI_Cedula",
+                        KeyConditionExpression=Key("GSI_CedulaPK").eq(f"CEDULA#{norm_cedula}"),
+                        Limit=1,
+                    )
+                    items_ext = resp_ext.get("Items", [])
+                    if isinstance(items_ext, list) and len(items_ext) > 0:
+                        return build_response(409, {
+                            "success": False,
+                            "error": "REPORTE_DUPLICADO",
+                            "mensaje": f"Esta vivienda ya fue evaluada oficialmente por SINAPROC (Cédula {mask_cedula(norm_cedula)}).",
+                        })
+                except Exception as e:
+                    print(f"Aviso: GSI_Cedula query en ExternalReportsTable omitido/error: {e}")
+
         # 1. Guardar reporte completo en DynamoDB
         report_dict = assessment.to_dict()
         # Asegurar clave de partición para DynamoDB
@@ -212,6 +255,13 @@ def lambda_handler(event: dict, context) -> dict:
         report_dict["SK"] = f"METADATA#{timestamp}"
         report_dict["GSI1PK"] = f"PROVINCIA#{ubicacion.provincia}#DISTRITO#{ubicacion.distrito}"
         report_dict["GSI1SK"] = f"PRIORIDAD#{prioridad.value}#{timestamp}"
+        report_dict["fuente"] = "APP"
+        report_dict["sistemas_vinculados"] = ["APP"]
+
+        if norm_cedula:
+            report_dict["cedula_normalizada"] = norm_cedula
+            report_dict["GSI2PK"] = f"CEDULA#{norm_cedula}"
+            report_dict["GSI2SK"] = f"APP#{timestamp}"
         
         # Convertir floats a Decimal para compatibilidad estricta con DynamoDB
         dynamo_item = json.loads(json.dumps(report_dict), parse_float=Decimal)

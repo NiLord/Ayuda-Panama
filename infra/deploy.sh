@@ -17,12 +17,9 @@ echo "================================================================="
 # 0. Generación criptográfica aleatoria de API Key, Secret y Admin Key en memoria
 APP_API_KEY="${APP_API_KEY:-$(openssl rand -hex 24)}"
 APP_API_SECRET="${APP_API_SECRET:-$(openssl rand -hex 32)}"
-ADMIN_SECRET_KEY="${ADMIN_SECRET_KEY:-$(openssl rand -hex 24)}"
-
 echo "==> Generando / verificando credenciales seguras de aplicación..."
 echo "    - API Key:    ${APP_API_KEY:0:8}**************** (oculta)"
 echo "    - API Secret: ******************************** (oculto)"
-echo "    - Admin Key:  ******************************** (oculto)"
 
 # Registrar secretos en AWS SSM Parameter Store como SecureString cifrado con KMS
 echo "==> Guardando secretos en AWS SSM Parameter Store (SecureString cifrado)..."
@@ -30,14 +27,6 @@ aws ssm put-parameter \
   --name "/ayuda-panama/${ENVIRONMENT}/api-secret" \
   --type "SecureString" \
   --value "${APP_API_SECRET}" \
-  --overwrite \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" > /dev/null || echo "    (Aviso: SSM put-parameter omitido o no autorizado)"
-
-aws ssm put-parameter \
-  --name "/ayuda-panama/${ENVIRONMENT}/admin-key" \
-  --type "SecureString" \
-  --value "${ADMIN_SECRET_KEY}" \
   --overwrite \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" > /dev/null || echo "    (Aviso: SSM put-parameter omitido o no autorizado)"
@@ -59,7 +48,6 @@ aws cloudformation deploy \
       Environment="${ENVIRONMENT}" \
       AppApiKey="${APP_API_KEY}" \
       AppApiSecret="${APP_API_SECRET}" \
-      AdminSecretKey="${ADMIN_SECRET_KEY}" \
   --capabilities CAPABILITY_NAMED_IAM \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
@@ -76,9 +64,11 @@ echo "==> 4. Actualizando código de las Lambdas..."
 FUNCTIONS=(
   "lse-authorizer-${ENVIRONMENT}"
   "lse-submit-report-${ENVIRONMENT}"
-  "lse-get-public-reports-${ENVIRONMENT}"
+  "lse-check-duplicate-${ENVIRONMENT}"
+  "lse-get-miviot-tramite-${ENVIRONMENT}"
+  "lse-sync-sinaproc-${ENVIRONMENT}"
   "lse-get-upload-presign-${ENVIRONMENT}"
-  "lse-export-edan-${ENVIRONMENT}"
+  "lse-national-dashboard-${ENVIRONMENT}"
 )
 
 for FN in "${FUNCTIONS[@]}"; do

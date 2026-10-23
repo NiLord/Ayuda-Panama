@@ -1,22 +1,28 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../models/disaster_report.dart';
+import '../models/duplicate_check_result.dart';
+import '../models/miviot_tramite_result.dart';
+import '../models/national_dashboard_data.dart';
 
 class ApiService {
   /// URL base dinámica resuelta desde AppConfig (centralizada en AWS SSM)
   static String get baseUrl => AppConfig.apiBaseUrl;
 
-  static const String apiKey = String.fromEnvironment(
-    'API_KEY',
-    defaultValue: '',
-  );
+  static String get apiKey {
+    const envKey = String.fromEnvironment('API_KEY', defaultValue: '');
+    if (envKey.isNotEmpty) return envKey;
+    return AppConfig.apiKey;
+  }
 
-  static const String apiSecret = String.fromEnvironment(
-    'API_SECRET',
-    defaultValue: '',
-  );
+  static String get apiSecret {
+    const envSec = String.fromEnvironment('API_SECRET', defaultValue: '');
+    if (envSec.isNotEmpty) return envSec;
+    return AppConfig.apiSecret;
+  }
 
   /// Cabeceras de autenticación requeridas por el Lambda Authorizer de API Gateway
   static Map<String, String> get _authHeaders => {
@@ -25,17 +31,77 @@ class ApiService {
     if (apiSecret.isNotEmpty) 'x-app-secret': apiSecret,
   };
 
+  /// Helper para decodificar respuestas HTTP en UTF-8 garantizando la visualización correcta de tildes y caracteres especiales
+  static String _decodeBody(http.Response response) {
+    try {
+      return utf8.decode(response.bodyBytes);
+    } catch (_) {
+      return response.body;
+    }
+  }
+
+  /// Ejecuta GET con fallback automático a AWS API Gateway si el dominio personalizado falla o da error
+  static Future<http.Response> _getWithFallback(
+    String pathAndQuery, {
+    Map<String, String>? headers,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final primaryUri = Uri.parse('${AppConfig.apiBaseUrl}$pathAndQuery');
+    final fallbackUri = Uri.parse('${AppConfig.httpApiRawEndpoint}$pathAndQuery');
+
+    if (primaryUri != fallbackUri) {
+      debugPrint('🌐 [API GET] Intentando: $primaryUri');
+      try {
+        final res = await http.get(primaryUri, headers: headers).timeout(const Duration(seconds: 3));
+        debugPrint('📡 [API GET] Código devuelto por $primaryUri: ${res.statusCode}');
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          return res;
+        }
+        debugPrint('⚠️ [API GET] Código no exitoso (${res.statusCode}) desde dominio principal. Activando fallback a AWS...');
+      } catch (e) {
+        debugPrint('⚠️ [API GET] Error en endpoint principal: $e');
+      }
+    }
+
+    debugPrint('🔄 [API GET FALLBACK] Consultando endpoint directo: $fallbackUri');
+    try {
+      final fallbackRes = await http.get(fallbackUri, headers: headers).timeout(timeout);
+      debugPrint('✅ [API GET FALLBACK] Código recibido: ${fallbackRes.statusCode} (${fallbackRes.body.length} bytes)');
+      return fallbackRes;
+    } catch (e) {
+      debugPrint('💥 [API GET FALLBACK ERROR]: $e');
+      rethrow;
+    }
+  }
+
+  /// Ejecuta POST con fallback automático a AWS API Gateway si el dominio personalizado falla o da error
+  static Future<http.Response> _postWithFallback(
+    String pathAndQuery, {
+    Map<String, String>? headers,
+    Object? body,
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final primaryUri = Uri.parse('${AppConfig.apiBaseUrl}$pathAndQuery');
+    try {
+      final res = await http.post(primaryUri, headers: headers, body: body).timeout(timeout);
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return res;
+      }
+    } catch (_) {}
+
+    final fallbackUri = Uri.parse('${AppConfig.httpApiRawEndpoint}$pathAndQuery');
+    return await http.post(fallbackUri, headers: headers, body: body).timeout(timeout);
+  }
+
   /// Envía un reporte de desastre a AWS API Gateway
   static Future<bool> submitReport(DisasterReport report) async {
     try {
-      final url = Uri.parse('$baseUrl/api/v1/reports');
-      final response = await http
-          .post(
-            url,
-            headers: _authHeaders,
-            body: jsonEncode(report.toJson()),
-          )
-          .timeout(const Duration(seconds: 8));
+      final response = await _postWithFallback(
+        '/api/v1/reports',
+        headers: _authHeaders,
+        body: jsonEncode(report.toJson()),
+        timeout: const Duration(seconds: 8),
+      );
 
       return response.statusCode == 201 || response.statusCode == 200;
     } catch (_) {
@@ -43,22 +109,25 @@ class ApiService {
     }
   }
 
-  /// Consulta los reportes públicos verificados desde AWS (soporta delta con since)
-  static Future<Map<String, dynamic>?> fetchPublicReports({String? since}) async {
+  /// Consulta las estadísticas consolidadas del Dashboard Nacional (siempre lee el registro precalculado)
+  static Future<NationalDashboardData?> fetchNationalDashboard() async {
     try {
-      final queryParam = (since != null && since.isNotEmpty)
-          ? '?since=${Uri.encodeComponent(since)}'
-          : '';
-      final url = Uri.parse('$baseUrl/api/v1/reports/public$queryParam');
-      final response = await http
-          .get(url, headers: _authHeaders)
-          .timeout(const Duration(seconds: 10));
+      final response = await _getWithFallback(
+        '/api/v1/dashboard/national',
+        headers: _authHeaders,
+        timeout: const Duration(seconds: 15),
+      );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+        final Map<String, dynamic> body = jsonDecode(_decodeBody(response));
+        if (body['data'] is Map<String, dynamic>) {
+          return NationalDashboardData.fromJson(body['data'] as Map<String, dynamic>);
+        }
       }
+      debugPrint('⚠️ [API fetchNationalDashboard] Status code: ${response.statusCode}');
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('💥 [API fetchNationalDashboard Error]: $e\n$st');
       return null;
     }
   }
@@ -73,7 +142,6 @@ class ApiService {
   }) async {
     try {
       final ext = extension.replaceAll('.', '').toLowerCase();
-      final url = Uri.parse('$baseUrl/api/v1/uploads/presign');
       final Map<String, dynamic> bodyData = {
         'report_id': reportId,
         'category': category,
@@ -82,19 +150,20 @@ class ApiService {
       if (photoId != null) bodyData['photo_id'] = photoId;
       if (fileName != null) bodyData['file_name'] = fileName;
 
-      final response = await http
-          .post(
-            url,
-            headers: _authHeaders,
-            body: jsonEncode(bodyData),
-          )
-          .timeout(const Duration(seconds: 8));
+      final response = await _postWithFallback(
+        '/api/v1/uploads/presign',
+        headers: _authHeaders,
+        body: jsonEncode(bodyData),
+        timeout: const Duration(seconds: 8),
+      );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+        return jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
       }
+      debugPrint('⚠️ [API fetchPublicReports] Status code: ${response.statusCode}');
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('💥 [API fetchPublicReports Error]: $e\n$st');
       return null;
     }
   }
@@ -148,6 +217,102 @@ class ApiService {
       return null;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Verifica en tiempo real si ya existe una evaluación previa para la cédula en la App o SINAPROC
+  static Future<DuplicateCheckResult> checkCedulaDuplicate(String cedula) async {
+    try {
+      final response = await _postWithFallback(
+        '/api/v1/reports/check-duplicate',
+        headers: _authHeaders,
+        body: jsonEncode({'cedula': cedula}),
+        timeout: const Duration(seconds: 22),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
+        return DuplicateCheckResult.fromJson(data);
+      } else {
+        final data = jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
+        final isTimeout = response.statusCode == 504 || response.statusCode == 408;
+        return DuplicateCheckResult(
+          success: false,
+          existeDuplicado: false,
+          esTimeout: isTimeout,
+          cedula: cedula,
+          cedulaCensurada: '',
+          sistemas: [],
+          detalles: [],
+          mensaje: data['mensaje'] as String? ?? 'Error verificando cédula',
+          error: data['error'] as String? ?? (isTimeout ? 'TIMEOUT' : 'HTTP_${response.statusCode}'),
+        );
+      }
+    } catch (e) {
+      final isTimeout = e.toString().toLowerCase().contains('timeout');
+      return DuplicateCheckResult(
+        success: false,
+        existeDuplicado: false,
+        esTimeout: isTimeout,
+        cedula: cedula,
+        cedulaCensurada: '',
+        sistemas: [],
+        detalles: [],
+        mensaje: isTimeout
+            ? 'Tiempo de espera agotado al consultar los servicios del Estado. Por favor reintente.'
+            : 'No fue posible validar la cédula por problemas de conexión.',
+        error: isTimeout ? 'TIMEOUT' : e.toString(),
+      );
+    }
+  }
+
+  /// Consulta el expediente y avance en las 5 etapas del MIVIOT para una cédula
+  static Future<MiviotTramiteResult?> fetchMiviotTramite(
+    String cedula, {
+    bool force = false,
+  }) async {
+    try {
+      final forceParam = force ? '&force=true' : '';
+      final response = await _getWithFallback(
+        '/api/v1/tramites/miviot?cedula=${Uri.encodeComponent(cedula)}$forceParam',
+        headers: _authHeaders,
+        timeout: const Duration(seconds: 20),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
+        return MiviotTramiteResult.fromJson(data);
+      } else {
+        final isTimeout = response.statusCode == 504 || response.statusCode == 408;
+        return MiviotTramiteResult(
+          success: false,
+          encontrado: false,
+          esTimeout: isTimeout,
+          verificadoInexistente: false,
+          error: isTimeout ? 'TIMEOUT' : 'HTTP_${response.statusCode}',
+          puedeReintentar: true,
+          cedula: cedula,
+          cedulaCensurada: '',
+          mensaje: isTimeout
+              ? 'El portal de MIVIOT tardó demasiado en responder (Timeout).'
+              : 'Código de error ${response.statusCode} al consultar el portal de MIVIOT.',
+        );
+      }
+    } catch (e) {
+      final isTimeout = e.toString().toLowerCase().contains('timeout');
+      return MiviotTramiteResult(
+        success: false,
+        encontrado: false,
+        esTimeout: isTimeout,
+        verificadoInexistente: false,
+        error: isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR',
+        puedeReintentar: true,
+        cedula: cedula,
+        cedulaCensurada: '',
+        mensaje: isTimeout
+            ? 'Tiempo de espera agotado al conectar con el portal externo de MIVIOT.'
+            : 'Error de red consultando el portal de MIVIOT: $e',
+      );
     }
   }
 }

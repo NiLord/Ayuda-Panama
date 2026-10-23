@@ -5,7 +5,22 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ---
 
-## [Unreleased]
+## [1.1.0] - 2026-10-22
+
+### Added
+- **Integración y Deduplicación Multi-Fuente (SINAPROC, MIVIOT y App)**:
+  - Repositorio desacoplado de 3 tablas en DynamoDB: `lse-reports-table` (App), `lse-external-reports-table` (SINAPROC EDAN) y `lse-miviot-tramites-table` (Expedientes y etapas MIVIOT).
+  - Normalizador de Cédulas de Panamá (`normalize_cedula`, `mask_cedula`, `mask_person_name`) compatible con Ley 81.
+  - Adaptador Scraper para portal Odoo de MIVIOT (`MiviotAdapter`) con handshake de 2 fases (CSRF + cookies) y detección de 5 etapas habitacionales.
+  - Sincronizador de FeatureServer ArcGIS de SINAPROC (`sinaproc_sync.py` y Lambda `lse-sync-sinaproc`).
+  - Endpoint de validación de duplicados en tiempo real (`POST /api/v1/reports/check-duplicate`).
+  - Endpoint de consulta de expedientes MIVIOT (`GET /api/v1/tramites/miviot`).
+  - Bloqueo estricto e infranqueable de duplicados en Paso 0 de la App (botón "Siguiente" deshabilitado con alerta roja) y en el backend (HTTP 409 Conflict).
+  - Tarjetas de Monitoreo Nacional con badges distintivos `[Reporte App]`, `[SINAPROC EDAN]` y `[MIVIOT]` y botón de consulta de expediente MIVIOT (`MiviotTramiteDialog`).
+  - 100% de cadenas internacionalizadas en diccionarios JSON (`es.json`, `en.json`).
+- Suite completa de pruebas unitarias (`pytest` 35/35 passing, `flutter test` 25/25 passing).
+
+## [1.0.0]
 
 ### Added
 - Inicialización del Monorepo con versionamiento semántico independiente (`app-v*`, `api-v*`, `infra-v*`).
