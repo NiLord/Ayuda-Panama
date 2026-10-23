@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.fernandogonzalez.ayuda_los_santos"
+    namespace = "dev.fernandogonzalez.ayudapanama"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -16,7 +16,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.fernandogonzalez.ayuda_los_santos"
+        applicationId = "dev.fernandogonzalez.ayudapanama"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
