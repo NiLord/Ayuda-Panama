@@ -64,9 +64,8 @@ jobs:
           FUNCTIONS=(
             "lse-authorizer-${ENVIRONMENT}"
             "lse-submit-report-${ENVIRONMENT}"
-            "lse-get-public-reports-${ENVIRONMENT}"
+            "lse-national-dashboard-${ENVIRONMENT}"
             "lse-get-upload-presign-${ENVIRONMENT}"
-            "lse-export-edan-${ENVIRONMENT}"
             "lse-check-duplicate-${ENVIRONMENT}"
             "lse-get-miviot-tramite-${ENVIRONMENT}"
             "lse-sync-sinaproc-${ENVIRONMENT}"
@@ -84,4 +83,4 @@ jobs:
           echo "### ⚡ Despliegue de Backend & API Exitoso" >> $GITHUB_STEP_SUMMARY
           echo "- **Tag**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Región**: \`${AWS_REGION}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Funciones Actualizadas**: \`lse-authorizer\`, \`lse-submit-report\`, \`lse-get-public-reports\`, \`lse-get-upload-presign\`, \`lse-export-edan\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Funciones Actualizadas**: \`lse-authorizer\`, \`lse-submit-report\`, \`lse-national-dashboard\`, \`lse-get-upload-presign\`, \`lse-check-duplicate\`, \`lse-get-miviot-tramite\`, \`lse-sync-sinaproc\`" >> $GITHUB_STEP_SUMMARY
