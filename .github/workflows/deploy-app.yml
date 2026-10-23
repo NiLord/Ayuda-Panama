@@ -45,6 +45,8 @@ jobs:
     needs: analyze-and-test
     if: startsWith(github.ref, 'refs/tags/app-v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
@@ -66,13 +68,62 @@ jobs:
           cd frontend
           flutter pub get
 
-      - name: Compilar APK Android Release
+      - name: Preparar Keystore de Producción (Si existe secreto)
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Decodificando Keystore de Producción..."
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > frontend/android/upload-keystore.jks
+            echo "KEYSTORE_READY=true" >> $GITHUB_ENV
+          else
+            echo "No se encontró secreto ANDROID_KEYSTORE_BASE64. Compilando con firma debug..."
+            echo "KEYSTORE_READY=false" >> $GITHUB_ENV
+          fi
+
+      - name: Compilar Android App Bundle (.aab para Google Play)
+        run: |
+          cd frontend
+          flutter build appbundle --release
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/frontend/android/upload-keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Compilar APK Universal (.apk para instalación directa)
         run: |
           cd frontend
           flutter build apk --release
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/frontend/android/upload-keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Publicar Artefacto de Release
+      - name: Organizar Binarios para Release
+        run: |
+          mkdir -p release-binaries
+          cp frontend/build/app/outputs/bundle/release/app-release.aab release-binaries/ayuda-panama-${{ github.ref_name }}.aab
+          cp frontend/build/app/outputs/flutter-apk/app-release.apk release-binaries/ayuda-panama-${{ github.ref_name }}.apk
+          ls -lh release-binaries/
+
+      - name: Publicar Artefacto AAB en Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: ayuda-panama-${{ github.ref_name }}.aab
+          path: release-binaries/ayuda-panama-${{ github.ref_name }}.aab
+
+      - name: Publicar Artefacto APK en Actions
         uses: actions/upload-artifact@v4
         with:
           name: ayuda-panama-${{ github.ref_name }}.apk
-          path: frontend/build/app/outputs/flutter-apk/app-release.apk
+          path: release-binaries/ayuda-panama-${{ github.ref_name }}.apk
+
+      - name: Crear GitHub Release y Adjuntar Binarios
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release-binaries/ayuda-panama-${{ github.ref_name }}.aab
+            release-binaries/ayuda-panama-${{ github.ref_name }}.apk
