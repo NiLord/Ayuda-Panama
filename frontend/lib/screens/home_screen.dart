@@ -91,6 +91,22 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Logo Oficial Centrado
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 12),
+                child: Hero(
+                  tag: 'app_branding_logo',
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    height: 130,
+                    fit: BoxFit.contain,
+                    semanticLabel: 'Logo Ayuda Panamá',
+                  ),
+                ),
+              ),
+            ),
+
             // Tarjeta de Bienvenida y Guía
             Container(
               padding: const EdgeInsets.all(16),
