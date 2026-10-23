@@ -97,22 +97,26 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   // Validación y Bloqueo de Cédula Duplicada
   bool _verificandoCedula = false;
   DuplicateCheckResult? _duplicadoResult;
-  Timer? _cedulaDebounceTimer;
+  final FocusNode _cedulaFocusNode = FocusNode();
+
+  void _onCedulaFocusChange() {
+    if (!_cedulaFocusNode.hasFocus) {
+      final cedula = _afectadoCedulaCtrl.text.trim();
+      if (cedula.isNotEmpty && cedula.length >= 5) {
+        _verificarDuplicado(cedula);
+      }
+    }
+  }
 
   void _onCedulaChanged(String val) {
-    _cedulaDebounceTimer?.cancel();
-    if (val.trim().length < 5) {
+    if (val.trim().length < 5 && _duplicadoResult != null) {
       if (mounted) {
         setState(() {
           _duplicadoResult = null;
           _verificandoCedula = false;
         });
       }
-      return;
     }
-    _cedulaDebounceTimer = Timer(const Duration(milliseconds: 600), () {
-      _verificarDuplicado(val.trim());
-    });
   }
 
   Future<void> _verificarDuplicado(String cedula) async {
@@ -130,6 +134,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
   @override
   void initState() {
     super.initState();
+    _cedulaFocusNode.addListener(_onCedulaFocusChange);
     if (widget.initialReport != null) {
       final rep = widget.initialReport!;
       _provincia = rep.provincia;
@@ -268,7 +273,8 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
 
   @override
   void dispose() {
-    _cedulaDebounceTimer?.cancel();
+    _cedulaFocusNode.removeListener(_onCedulaFocusChange);
+    _cedulaFocusNode.dispose();
     _comunidadCtrl.dispose();
     _calleCtrl.dispose();
     _referenciaCtrl.dispose();
@@ -952,6 +958,7 @@ class _ReportWizardScreenState extends State<ReportWizardScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _afectadoCedulaCtrl,
+                  focusNode: _cedulaFocusNode,
                   onChanged: _onCedulaChanged,
                   decoration: InputDecoration(
                     labelText: msg.titularCedulaLabel,

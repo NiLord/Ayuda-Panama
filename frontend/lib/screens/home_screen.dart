@@ -91,30 +91,45 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Banner de Emergencia Sísmica
+            // Tarjeta de Bienvenida y Guía
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.red.shade50,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red.shade200),
+                border: Border.all(color: Colors.grey.shade300),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.red.shade800, size: 36),
-                  const SizedBox(width: 12),
-                  Expanded(
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.volunteer_activism_rounded, color: Colors.red.shade800, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          msg.homeEmergencyBannerTitle,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red),
+                          'Bienvenido a Ayuda Panamá',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 4),
                         Text(
-                          msg.homeEmergencyBannerSubtitle,
-                          style: const TextStyle(fontSize: 13, color: Colors.black87),
+                          'Plataforma ciudadana de asistencia y evaluación de daños. Consulta el estado de tu solicitud con tu cédula o registra un nuevo reporte de afectación.',
+                          style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.35),
                         ),
                       ],
                     ),

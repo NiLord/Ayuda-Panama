@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/duplicate_check_result.dart';
 import '../models/miviot_tramite_result.dart';
 import '../services/duplicate_check_service.dart';
-import '../services/reporter_profile_service.dart';
 import 'report_wizard_screen.dart';
 
 class CitizenQueryScreen extends StatefulWidget {
@@ -29,15 +28,10 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
   }
 
   Future<void> _inicializar() async {
+    // Por defecto dejar en blanco para que el usuario escriba su cédula
     if (widget.initialCedula != null && widget.initialCedula!.isNotEmpty) {
       _cedulaController.text = widget.initialCedula!;
       _ejecutarConsulta();
-    } else {
-      final profile = await ReporterProfileService.getOrCreateProfile();
-      if (profile.cedula.isNotEmpty) {
-        _cedulaController.text = profile.cedula;
-        _ejecutarConsulta();
-      }
     }
   }
 
@@ -48,6 +42,9 @@ class _CitizenQueryScreenState extends State<CitizenQueryScreen> {
   }
 
   Future<void> _ejecutarConsulta({bool force = true}) async {
+    // Ocultar teclado para no estorbar la visualización de la data
+    FocusScope.of(context).unfocus();
+
     final cedula = _cedulaController.text.trim();
     if (cedula.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

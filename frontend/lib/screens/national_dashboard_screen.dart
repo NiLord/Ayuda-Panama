@@ -179,28 +179,6 @@ class _NationalDashboardScreenState extends State<NationalDashboardScreen>
                 )
               : Column(
                   children: [
-                    // Barra de última actualización (GMT-5 Panamá, sin "EN VIVO")
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      color: const Color(0xFF1E293B).withValues(alpha: 0.6),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.access_time_rounded, size: 14, color: Color(0xFF38BDF8)),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Última actualización: ${_data!.ultimaActualizacionTexto}',
-                              style: const TextStyle(
-                                color: Color(0xFF94A3B8),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     // Selector Global de Provincias (afecta a Población y Severidad)
                     _buildGlobalProvinceSelector(
                       _data!.severidadHabitacional.provincias,
@@ -227,6 +205,34 @@ class _NationalDashboardScreenState extends State<NationalDashboardScreen>
                     ),
                   ],
                 ),
+      bottomNavigationBar: _data != null
+          ? Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E293B),
+                border: Border(top: BorderSide(color: Color(0xFF334155), width: 0.5)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.access_time_rounded, size: 14, color: Color(0xFF38BDF8)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Última actualización: ${_data!.ultimaActualizacionTexto}',
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
     );
   }
 
@@ -370,7 +376,7 @@ class _NationalDashboardScreenState extends State<NationalDashboardScreen>
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Aviso: Esta información se brinda con fines preliminares y de visualización en desarrollo. La única fuente oficial de la verdad son las autoridades competentes como el SINAPROC. Esta aplicación busca apoyar y brindar visibilidad a la labor de las instituciones en campo.',
+              'Aviso: Esta información se brinda con fines preliminares y de visualización en desarrollo. La única fuente oficial son las autoridades competentes como el SINAPROC. Esta aplicación busca apoyar y brindar visibilidad a la labor de las instituciones en campo.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.8),
                 fontSize: 11,

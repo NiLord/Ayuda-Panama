@@ -22,6 +22,29 @@ class _OnboardingProfileScreenState extends State<OnboardingProfileScreen> {
   bool _guardando = false;
 
   @override
+  void initState() {
+    super.initState();
+    _cargarPerfilExistente();
+  }
+
+  Future<void> _cargarPerfilExistente() async {
+    final profile = await ReporterProfileService.getOrCreateProfile();
+    if (mounted) {
+      setState(() {
+        if (profile.nombre.isNotEmpty) _nombreCtrl.text = profile.nombre;
+        if (profile.cedula.isNotEmpty) _cedulaCtrl.text = profile.cedula;
+        if (profile.telefono.isNotEmpty) _telefonoCtrl.text = profile.telefono;
+        if (profile.organizacion.isNotEmpty) _orgCtrl.text = profile.organizacion;
+
+        final rolMatch = RolInformante.values.where((r) => r.value == profile.rol);
+        if (rolMatch.isNotEmpty) {
+          _rolSeleccionado = rolMatch.first;
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _nombreCtrl.dispose();
     _cedulaCtrl.dispose();
@@ -43,7 +66,7 @@ class _OnboardingProfileScreenState extends State<OnboardingProfileScreen> {
     );
 
     if (mounted) {
-      if (widget.isFirstReportFlow) {
+      if (widget.isFirstReportFlow || Navigator.of(context).canPop()) {
         Navigator.of(context).pop(true);
       } else {
         Navigator.of(context).pushReplacement(
