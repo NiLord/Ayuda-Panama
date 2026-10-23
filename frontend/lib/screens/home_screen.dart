@@ -3,8 +3,8 @@ import '../l10n/app_messages.dart';
 import '../services/offline_queue_service.dart';
 import '../services/reporter_profile_service.dart';
 import 'citizen_query_screen.dart';
+import 'national_dashboard_screen.dart';
 import 'onboarding_profile_screen.dart';
-import 'public_map_screen.dart';
 import 'report_wizard_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -238,11 +238,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Botón Secundario: VER SITUACIÓN NACIONAL
+            // Botón Secundario: ESTADÍSTICA NACIONAL
             OutlinedButton.icon(
               onPressed: () async {
                 await Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const PublicMapScreen()),
+                  MaterialPageRoute(builder: (_) => const NationalDashboardScreen()),
                 );
                 _actualizarEstado();
               },
@@ -251,9 +251,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 side: BorderSide(color: Colors.blueGrey.shade800, width: 2),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: Icon(Icons.public, color: Colors.blueGrey.shade900),
+              icon: Icon(Icons.analytics_rounded, color: Colors.blueGrey.shade900),
               label: Text(
-                msg.homeMonitoringBtn,
+                'ESTADÍSTICA NACIONAL',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.blueGrey.shade900),
               ),
             ),

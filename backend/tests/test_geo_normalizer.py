@@ -5,7 +5,6 @@ from backend.src.utils.geo_normalizer import (
     format_clean_name,
     homologar_evaluador,
 )
-from backend.src.adapters.public_map_adapter import PublicMapAdapter
 
 
 class TestGeoNormalizer(unittest.TestCase):
@@ -39,35 +38,6 @@ class TestGeoNormalizer(unittest.TestCase):
         self.assertEqual(homologar_evaluador("sinaproc"), "Brigada SINAPROC")
         self.assertEqual(homologar_evaluador(""), "Brigada SINAPROC")
         self.assertEqual(homologar_evaluador(None), "Brigada SINAPROC")
-
-    def test_public_map_adapter_homogenizes_external_item(self):
-        item = {
-            "PK": "SINAPROC#13179",
-            "SK": "METADATA",
-            "external_id": "13179",
-            "fuente": "SINAPROC",
-            "timestamp": "2024-11-12T10:00:00Z",
-            "habitabilidad": "HABITABLE",
-            "evaluador": "brigada_sur",
-            "total_afectados": 4,
-            "ubicacion": {
-                "provincia": "los_santos",
-                "distrito": "las_tablas",
-                "corregimiento": "el_cocal",
-                "comunidad_sector": "calle_arriba",
-                "coordenadas": {"lat": 7.76, "lng": -80.28},
-            },
-        }
-
-        feature = PublicMapAdapter.to_public_feature_from_external(item)
-        props = feature["properties"]
-
-        self.assertEqual(props["provincia"], "Los Santos")
-        self.assertEqual(props["distrito"], "Las Tablas")
-        self.assertEqual(props["corregimiento"], "El Cocal")
-        self.assertEqual(props["comunidad_sector"], "Calle Arriba")
-        self.assertEqual(props["reporter_id"], "Brigada Sur")
-        self.assertEqual(props["total_ocupantes"], 4)
 
 
 if __name__ == "__main__":

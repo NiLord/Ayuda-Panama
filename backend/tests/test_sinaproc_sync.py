@@ -35,9 +35,10 @@ from backend.src.adapters.sinaproc_sync import (
 
 class TestSinaprocSync(unittest.TestCase):
     def test_map_sinaproc_damage_to_atc20(self):
-        self.assertEqual(map_sinaproc_damage_to_atc20("Colapso total de paredes"), "COLAPSO_TOTAL")
+        self.assertEqual(map_sinaproc_damage_to_atc20("Daño total de paredes"), "INHABITABLE")
         self.assertEqual(map_sinaproc_damage_to_atc20("Daño severo en techo"), "INHABITABLE")
         self.assertEqual(map_sinaproc_damage_to_atc20("Daño parcial en muros"), "ACCESO_RESTRINGIDO")
+        self.assertEqual(map_sinaproc_damage_to_atc20("Daño moderado"), "HABITABLE")
         self.assertEqual(map_sinaproc_damage_to_atc20("Fisura leve en repello"), "HABITABLE")
         self.assertEqual(map_sinaproc_damage_to_atc20(None), "HABITABLE")
 

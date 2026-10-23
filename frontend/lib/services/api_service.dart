@@ -6,6 +6,7 @@ import '../config/app_config.dart';
 import '../models/disaster_report.dart';
 import '../models/duplicate_check_result.dart';
 import '../models/miviot_tramite_result.dart';
+import '../models/national_dashboard_data.dart';
 
 class ApiService {
   /// URL base dinámica resuelta desde AppConfig (centralizada en AWS SSM)
@@ -108,35 +109,25 @@ class ApiService {
     }
   }
 
-  /// Consulta los reportes públicos verificados desde AWS (soporta paginación por lotes de 20 y cursor next_token)
-  static Future<Map<String, dynamic>?> fetchPublicReports({
-    String? since,
-    int limit = 20,
-    String? nextToken,
-  }) async {
+  /// Consulta las estadísticas consolidadas del Dashboard Nacional (siempre lee el registro precalculado)
+  static Future<NationalDashboardData?> fetchNationalDashboard() async {
     try {
-      final queryParams = <String>['limit=$limit'];
-      if (since != null && since.isNotEmpty) {
-        queryParams.add('since=${Uri.encodeComponent(since)}');
-      }
-      if (nextToken != null && nextToken.isNotEmpty) {
-        queryParams.add('next_token=${Uri.encodeComponent(nextToken)}');
-      }
-      final queryString = '?${queryParams.join('&')}';
-
       final response = await _getWithFallback(
-        '/api/v1/reports/public$queryString',
+        '/api/v1/dashboard/national',
         headers: _authHeaders,
         timeout: const Duration(seconds: 15),
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(_decodeBody(response)) as Map<String, dynamic>;
+        final Map<String, dynamic> body = jsonDecode(_decodeBody(response));
+        if (body['data'] is Map<String, dynamic>) {
+          return NationalDashboardData.fromJson(body['data'] as Map<String, dynamic>);
+        }
       }
-      debugPrint('⚠️ [API fetchPublicReports] Status code: ${response.statusCode}');
+      debugPrint('⚠️ [API fetchNationalDashboard] Status code: ${response.statusCode}');
       return null;
     } catch (e, st) {
-      debugPrint('💥 [API fetchPublicReports Error]: $e\n$st');
+      debugPrint('💥 [API fetchNationalDashboard Error]: $e\n$st');
       return null;
     }
   }

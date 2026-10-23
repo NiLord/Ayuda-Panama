@@ -83,7 +83,7 @@ void main() {
         'reporte': 'AFV/07877',
         'fecha_recibido': '12/10/2026',
         'paso_actual': 2,
-        'estado_actual': 'Evaluación Técnica en Sitio',
+        'estado_actual': 'Vivienda evaluada. Pendiente asignación de programa.',
         'ultima_actualizacion': '2026-10-22T10:00:00Z',
         'mensaje': 'Localizado en MIVIOT',
       };
@@ -93,9 +93,9 @@ void main() {
       expect(result.encontrado, isTrue);
       expect(result.reporte, equals('AFV/07877'));
       expect(result.pasoActual, equals(2));
-      expect(result.estadoActual, equals('Evaluación Técnica en Sitio'));
+      expect(result.estadoActual, equals('Vivienda evaluada. Pendiente asignación de programa.'));
       expect(MiviotTramiteResult.etapasOficiales.length, equals(5));
-      expect(MiviotTramiteResult.etapasOficiales[1], equals('Evaluación Técnica en Sitio'));
+      expect(MiviotTramiteResult.etapasOficiales[1], equals('Vivienda evaluada. Pendiente asignación de programa.'));
     });
 
     test('Handles non-found case gracefully', () {
@@ -125,7 +125,7 @@ void main() {
         reporte: 'AFV/07877',
         fechaRecibido: '12/10/2026',
         pasoActual: 2,
-        estadoActual: 'Evaluación Técnica en Sitio',
+        estadoActual: 'Vivienda evaluada. Pendiente asignación de programa.',
         mensaje: 'Trámite activo',
       );
 
@@ -141,10 +141,10 @@ void main() {
       );
 
       expect(find.textContaining('AFV/07877'), findsWidgets);
-      expect(find.text('Evaluación Técnica en Sitio'), findsWidgets);
+      expect(find.text('Vivienda evaluada. Pendiente asignación de programa.'), findsWidgets);
       expect(find.text('Fase actual en ejecución'), findsOneWidget);
-      expect(find.text('Recepción y Registro de Solicitud'), findsOneWidget);
-      expect(find.text('Entrega de Ayuda o Vivienda Finalizada'), findsOneWidget);
+      expect(find.text('Reporte de afectación de vivienda registrado. Pendiente evaluación técnica.'), findsOneWidget);
+      expect(find.text('Vivienda entregada.'), findsOneWidget);
     });
   });
 }

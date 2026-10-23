@@ -5,7 +5,7 @@ en la base de datos de la App (ReportsTable) o en las fichas oficiales de SINAPR
 Adicionalmente, consulta si existe un expediente de trámite habitacional activo en MIVIOT.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import logging
 import os

@@ -37,21 +37,20 @@ class DisasterEvent {
 }
 
 /// Gestión centralizada de configuración de la aplicación
-/// Evita código 'quemado' y soporta sincronización remota desde AWS SSM
+/// Las credenciales de acceso se inyectan estrictamente en tiempo de compilación (--dart-define)
 class AppConfig {
   static const String _defaultApiUrl = '';
   static const String _defaultRawApiUrl = '';
   static const String _defaultPostalUrl = 'https://codigospostalespanama.gob.pa/api/location';
   static const String _defaultEventCode = 'SISMO_OCTUBRE_2026';
-  static const String _defaultApiKey = '';
-  static const String _defaultApiSecret = '';
+  // Credenciales inyectadas en tiempo de compilación vía --dart-define
+  static const String apiKey = String.fromEnvironment('API_KEY', defaultValue: '');
+  static const String apiSecret = String.fromEnvironment('API_SECRET', defaultValue: '');
 
   // Configuración cargada en memoria
   static String environment = 'prod';
   static String apiBaseUrl = _defaultApiUrl;
   static String httpApiRawEndpoint = _defaultRawApiUrl;
-  static String apiKey = _defaultApiKey;
-  static String apiSecret = _defaultApiSecret;
   static String postalCodeServiceUrl = _defaultPostalUrl;
   static String defaultEventCode = _defaultEventCode;
   static List<DisasterEvent> availableEvents = [
@@ -111,8 +110,6 @@ class AppConfig {
       environment = data['environment'] ?? environment;
       apiBaseUrl = data['apiBaseUrl'] ?? apiBaseUrl;
       httpApiRawEndpoint = data['httpApiRawEndpoint'] ?? httpApiRawEndpoint;
-      apiKey = data['apiKey'] ?? apiKey;
-      apiSecret = data['apiSecret'] ?? apiSecret;
       postalCodeServiceUrl = data['postalCodeServiceUrl'] ?? postalCodeServiceUrl;
       defaultEventCode = data['defaultEventCode'] ?? defaultEventCode;
 

@@ -1,7 +1,7 @@
 {
   "environment": "prod",
-  "apiBaseUrl": "https://",
-  "httpApiRawEndpoint": "https://",
+  "apiBaseUrl": "",
+  "httpApiRawEndpoint": "",
   "apiKey": "",
   "apiSecret": "",
   "postalCodeServiceUrl": "https://codigospostalespanama.gob.pa/api/location",

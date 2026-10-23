@@ -23,7 +23,6 @@ from backend.src.models.disaster_assessment import (
     PrioridadTriage,
 )
 from backend.src.adapters.sinaproc_adapter import SinaprocSurvey123Adapter
-from backend.src.adapters.public_map_adapter import PublicMapAdapter
 
 
 def create_sample_assessment():
@@ -130,25 +129,6 @@ class TestDisasterAssessmentAndAdapters(unittest.TestCase):
         self.assertEqual(attrs["c_embarazadas"], 1.0)
         self.assertEqual(attrs["k_bebe"], 1.0)
         self.assertEqual(attrs["t_miembros"], 4.0)
-
-    def test_public_map_adapter_pii_redaction(self):
-        """TEST CRÍTICO: Garantiza que NINGÚN dato PII o forense se filtre al mapa público"""
-        public_feature = PublicMapAdapter.to_public_feature(self.assessment)
-        props = public_feature["properties"]
-
-        self.assertEqual(props["id"], "rep_test_001")
-        self.assertEqual(props["habitabilidad"], "INHABITABLE")
-        self.assertEqual(props["semaforo_color"], "#E74C3C")
-        self.assertEqual(props["prioridad"], "P1_CRITICO_VIDA")
-        self.assertEqual(props["total_ocupantes"], 4)
-
-        props_str = str(props)
-        pii_keywords = [
-            "Carlos Méndez", "Julia Ramos", "7-111-222", "+507 6789-0123",
-            "+507 6555-4321", "190.140.10.5", "Motorola", "inst_xyz"
-        ]
-        for pii in pii_keywords:
-            self.assertNotIn(pii, props_str, f"Fuga de PII detectada: '{pii}' en mapa público!")
 
 
 if __name__ == "__main__":

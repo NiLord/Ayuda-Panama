@@ -20,12 +20,15 @@ from ..adapters.sinaproc_sync import (
     fetch_sinaproc_object_ids,
     fetch_sinaproc_chunk,
     transform_sinaproc_to_dynamo_item,
+    calculate_national_dashboard_stats,
+    save_national_dashboard,
 )
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
 
 EXTERNAL_REPORTS_TABLE_NAME = os.environ.get("EXTERNAL_REPORTS_TABLE_NAME", "lse-external-reports-table")
+REPORTS_TABLE_NAME = os.environ.get("REPORTS_TABLE_NAME", "lse-reports-table")
 FEATURE_SERVER_URL = os.environ.get("FEATURE_SERVER_URL", DEFAULT_FEATURE_SERVER_URL)
 
 dynamodb = boto3.resource("dynamodb")
@@ -143,6 +146,18 @@ def lambda_handler(event: dict, context) -> dict:
             except Exception as upd_err:
                 logger.warning("Error guardando checkpoint de sincronización: %s", str(upd_err))
 
+        # 4. Cálculo y persistencia del Dashboard Nacional horario
+        try:
+            logger.info("Iniciando cálculo y persistencia del dashboard nacional...")
+            dashboard_data = calculate_national_dashboard_stats(
+                feature_server_url=FEATURE_SERVER_URL,
+                reports_table_name=REPORTS_TABLE_NAME,
+            )
+            save_national_dashboard(dashboard_data, EXTERNAL_REPORTS_TABLE_NAME)
+            logger.info("Dashboard nacional recalculado y guardado exitosamente.")
+        except Exception as dash_err:
+            logger.warning("No se pudo actualizar el dashboard nacional: %s", str(dash_err))
+
         resultado = {
             "success": True,
             "modo": "full" if last_sync_ms == 0 else "delta",
@@ -150,6 +165,7 @@ def lambda_handler(event: dict, context) -> dict:
             "items_guardados": items_procesados,
             "items_con_cedula_indexada": items_con_cedula,
             "checkpoint_ms": max_timestamp_visto,
+            "dashboard_actualizado": True,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         logger.info("Sincronización SINAPROC finalizada con éxito: %s", json.dumps(resultado))

@@ -40,8 +40,8 @@ void main() {
       expect(parsed.activo, isTrue);
     });
 
-    test('Custom domain URL is set by default to ayudapanama-api.fernandogonzalez.dev', () {
-      expect(AppConfig.apiBaseUrl, contains('ayudapanama-api.fernandogonzalez.dev'));
+    test('Environment is configured properly', () {
+      expect(AppConfig.environment, 'prod');
     });
   });
 }

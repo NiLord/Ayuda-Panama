@@ -10,11 +10,6 @@ Parameters:
     AllowedValues: [dev, staging, prod]
     Description: Ambiente de despliegue.
 
-  AdminSecretKey:
-    Type: String
-    NoEcho: true
-    Description: Clave de autenticación para acceso de autoridades (SINAPROC / Cruz Roja) al endpoint de exportación con PII.
-
   AppApiKey:
     Type: String
     NoEcho: true
@@ -287,23 +282,23 @@ Resources:
           def lambda_handler(event, context):
               return {"statusCode": 200, "body": "Placeholder para despliegue inicial"}
 
-  GetPublicReportsFunction:
+  NationalDashboardFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub lse-get-public-reports-${Environment}
+      FunctionName: !Sub lse-national-dashboard-${Environment}
       Runtime: python3.13
-      Handler: backend.src.handlers.get_public_reports.lambda_handler
+      Handler: backend.src.handlers.get_national_dashboard.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 15
       MemorySize: 256
       Environment:
         Variables:
-          REPORTS_TABLE_NAME: !Ref ReportsTable
           EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
+          REPORTS_TABLE_NAME: !Ref ReportsTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):
-              return {"statusCode": 200, "body": '{"type":"FeatureCollection","features":[]}'}
+              return {"statusCode": 200, "body": "{}"}
 
   CheckDuplicateFunction:
     Type: AWS::Lambda::Function
@@ -353,6 +348,7 @@ Resources:
       Environment:
         Variables:
           EXTERNAL_REPORTS_TABLE_NAME: !Ref ExternalReportsTable
+          REPORTS_TABLE_NAME: !Ref ReportsTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -390,24 +386,6 @@ Resources:
       Environment:
         Variables:
           EVIDENCE_BUCKET_NAME: !Ref EvidenceBucket
-      Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              return {"statusCode": 200, "body": "{}"}
-
-  ExportEdanFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub lse-export-edan-${Environment}
-      Runtime: python3.13
-      Handler: backend.src.handlers.export_edan.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 30
-      MemorySize: 512
-      Environment:
-        Variables:
-          REPORTS_TABLE_NAME: !Ref ReportsTable
-          ADMIN_SECRET_KEY: !Ref AdminSecretKey
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -516,22 +494,22 @@ Resources:
       AuthorizerId: !Ref HttpApiAuthorizer
       Target: !Sub integrations/${SubmitIntegration}
 
-  PublicIntegration:
+  NationalDashboardIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref HttpApi
       IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt GetPublicReportsFunction.Arn
+      IntegrationUri: !GetAtt NationalDashboardFunction.Arn
       PayloadFormatVersion: '2.0'
 
-  PublicRoute:
+  NationalDashboardRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
-      RouteKey: GET /api/v1/reports/public
+      RouteKey: GET /api/v1/dashboard/national
       AuthorizationType: CUSTOM
       AuthorizerId: !Ref HttpApiAuthorizer
-      Target: !Sub integrations/${PublicIntegration}
+      Target: !Sub integrations/${NationalDashboardIntegration}
 
   PresignIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -549,21 +527,6 @@ Resources:
       AuthorizationType: CUSTOM
       AuthorizerId: !Ref HttpApiAuthorizer
       Target: !Sub integrations/${PresignIntegration}
-
-  ExportIntegration:
-    Type: AWS::ApiGatewayV2::Integration
-    Properties:
-      ApiId: !Ref HttpApi
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt ExportEdanFunction.Arn
-      PayloadFormatVersion: '2.0'
-
-  ExportRoute:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: GET /api/v1/reports/export
-      Target: !Sub integrations/${ExportIntegration}
 
   CheckDuplicateIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -608,10 +571,10 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
 
-  PublicPermission:
+  NationalDashboardPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref GetPublicReportsFunction
+      FunctionName: !Ref NationalDashboardFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
@@ -636,14 +599,6 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref GetPresignedUrlFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
-
-  ExportPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref ExportEdanFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*

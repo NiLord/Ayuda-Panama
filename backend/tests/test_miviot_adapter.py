@@ -87,7 +87,7 @@ class TestMiviotAdapter(unittest.TestCase):
         self.assertEqual(result.reporte, "AFV/07877")
         self.assertEqual(result.fecha_recibido, "12/10/2026")
         self.assertEqual(result.paso_actual, 2)
-        self.assertEqual(result.estado_actual, "Evaluación Técnica en Sitio")
+        self.assertEqual(result.estado_actual, "Vivienda evaluada. Pendiente asignación de programa.")
         self.assertIsNone(result.error)
 
     def test_parse_scenario_b_not_found(self):
@@ -124,4 +124,4 @@ class TestMiviotAdapter(unittest.TestCase):
         self.assertTrue(result.encontrado)
         self.assertEqual(result.reporte, "AFV/07877")
         self.assertEqual(result.paso_actual, 2)
-        self.assertEqual(result.estado_actual, "Evaluación Técnica en Sitio")
+        self.assertEqual(result.estado_actual, "Vivienda evaluada. Pendiente asignación de programa.")

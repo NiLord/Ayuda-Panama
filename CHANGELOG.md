@@ -20,7 +20,7 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
   - 100% de cadenas internacionalizadas en diccionarios JSON (`es.json`, `en.json`).
 - Suite completa de pruebas unitarias (`pytest` 35/35 passing, `flutter test` 25/25 passing).
 
-## [Unreleased]
+## [1.0.0]
 
 ### Added
 - Inicialización del Monorepo con versionamiento semántico independiente (`app-v*`, `api-v*`, `infra-v*`).
