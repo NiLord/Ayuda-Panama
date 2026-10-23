@@ -23,6 +23,7 @@ from ..adapters.sinaproc_sync import (
     calculate_national_dashboard_stats,
     save_national_dashboard,
 )
+from ..utils.notifier import send_alert
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
@@ -169,10 +170,31 @@ def lambda_handler(event: dict, context) -> dict:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         logger.info("Sincronización SINAPROC finalizada con éxito: %s", json.dumps(resultado))
+
+        # Notificación agnóstica a la cola SQS de alertas
+        modo_str = "Full" if last_sync_ms == 0 else "Delta"
+        alert_msg = (
+            f"✅ *SINAPROC Sync Completado con Éxito*\n"
+            f"• *Modo:* `{modo_str}`\n"
+            f"• *Nuevos registros inyectados:* `{items_procesados}`\n"
+            f"• *Con cédula indexada:* `{items_con_cedula}`\n"
+            f"• *Total en lote:* `{total_ids}`\n"
+            f"• *Dashboard Nacional:* Actualizado\n"
+            f"• *Fecha/Hora:* `{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}`"
+        )
+        send_alert(alert_msg)
+
         return build_response(200, resultado)
 
     except Exception as e:
         logger.exception("Error en sincronización de SINAPROC: %s", str(e))
+        error_msg = (
+            f"🚨 *ERROR en Sincronización SINAPROC*\n"
+            f"• *Función:* `lse-sync-sinaproc`\n"
+            f"• *Error:* `{str(e)}`\n"
+            f"• *Fecha/Hora:* `{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}`"
+        )
+        send_alert(error_msg)
         return build_response(500, {
             "success": False,
             "error": "SYNC_ERROR",

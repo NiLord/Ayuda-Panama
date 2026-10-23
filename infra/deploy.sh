@@ -31,6 +31,8 @@ aws ssm put-parameter \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" > /dev/null || echo "    (Aviso: SSM put-parameter omitido o no autorizado)"
 
+ALERTS_QUEUE_ARN="${ALERTS_QUEUE_ARN:-}"
+
 # 1. Validar plantilla de CloudFormation
 echo "==> 1. Validando plantilla de CloudFormation..."
 aws cloudformation validate-template \
@@ -48,6 +50,7 @@ aws cloudformation deploy \
       Environment="${ENVIRONMENT}" \
       AppApiKey="${APP_API_KEY}" \
       AppApiSecret="${APP_API_SECRET}" \
+      AlertsQueueArn="${ALERTS_QUEUE_ARN}" \
   --capabilities CAPABILITY_NAMED_IAM \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
