@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../l10n/app_messages.dart';
 import '../services/offline_queue_service.dart';
 import '../services/reporter_profile_service.dart';
@@ -91,17 +92,30 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Logo Oficial Centrado
+            // Logo Oficial Centrado y Responsivo (Vectorial SVG con transparencia)
             Center(
               child: Padding(
                 padding: const EdgeInsets.only(top: 8, bottom: 12),
                 child: Hero(
                   tag: 'app_branding_logo',
-                  child: Image.asset(
-                    'assets/images/app_logo.png',
-                    height: 130,
-                    fit: BoxFit.contain,
-                    semanticLabel: 'Logo Ayuda Panamá',
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final media = MediaQuery.of(context);
+                      final isTablet = media.size.shortestSide >= 600;
+                      final isLandscape = media.orientation == Orientation.landscape;
+
+                      // Escalado responsivo y proporcional según resolución de pantalla
+                      final double logoHeight = isTablet
+                          ? (isLandscape ? 170.0 : 220.0)
+                          : (isLandscape ? 95.0 : (media.size.height * 0.16).clamp(115.0, 145.0));
+
+                      return SvgPicture.asset(
+                        'assets/images/app_logo.svg',
+                        height: logoHeight,
+                        fit: BoxFit.contain,
+                        semanticsLabel: 'Logo Ayuda Panamá',
+                      );
+                    },
                   ),
                 ),
               ),
